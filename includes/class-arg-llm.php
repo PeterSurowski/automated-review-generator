@@ -388,14 +388,14 @@ class ARG_LLM {
         // Compute max_tokens based on candidate count (cap to a safe max)
         $max_tokens = max( 200, min( 1500, intval( $candidate_count * $est_tokens_per_candidate ) ) );
 
-        $system = "You are a helpful assistant that invents usernames for product reviews. About 50% should be realistic human names (first names, last names, or name + initial combinations like 'John', 'Smith', 'Sarah K.', 'J. Martinez'). The other 50% can be creative usernames with underscores, hyphens, numbers, or mixed case. Avoid profanity and personal data. Return exactly one valid JSON array of strings and nothing else, e.g. [\"John Smith\", \"tech_guru_22\", \"L.Ross\", \"Sarah K.\", \"innovator_mind\"]. Do NOT include extra commentary or explanation.";
+        $system = "You are a helpful assistant that invents usernames for product reviews. About 50% should be realistic human names (first names, last names, or name + initial combinations like 'John', 'Smith', 'Sarah K.', 'J. Martinez'). Use SPACES between name parts, NOT underscores. Use a WIDE variety of diverse first names - never repeat names like Luna, Emma, or other common names. The other 50% can be creative usernames with underscores, hyphens, numbers, or mixed case. NEVER use the name 'Luna' in any form. Avoid profanity and personal data. Return exactly one valid JSON array of strings and nothing else, e.g. [\"John Smith\", \"tech_guru_22\", \"L.Ross\", \"Sarah K.\", \"innovator_mind\"]. Do NOT include extra commentary or explanation.";
 
         $user_msg = "Here are example usernames (do not repeat them verbatim). Examples are shown as bullets below:\n";
         foreach ( $examples as $i => $ex ) {
             $user_msg .= "- " . $ex . "\n";
         }
 
-        $user_msg .= "\nTask: Generate a single JSON array with exactly " . intval( $candidate_count ) . " unique candidate usernames. IMPORTANT: About 50% should be realistic human names (first names, last names, initials like \"John\", \"Smith\", \"Sarah K.\", \"J. Martinez\"). The other 50% can be creative usernames (tech_guru_22, Moon_Walker, Innovator, R3view3r). Names can use spaces, periods, letters only. Requirements: all usernames must be 3-30 characters, use only letters, numbers, underscores, hyphens, dots, or spaces, and must not repeat supplied examples. Do NOT output nested arrays or trailing commas; if you cannot meet constraints, return an empty array []. Output only the JSON array.";
+        $user_msg .= "\nTask: Generate a single JSON array with exactly " . intval( $candidate_count ) . " unique candidate usernames. IMPORTANT: About 50% should be realistic human names (first names, last names, initials like \"John\", \"Smith\", \"Sarah K.\", \"J. Martinez\"). CRITICAL: Use SPACES between name parts (\"John Smith\" NOT \"John_Smith\"). Use a WIDE variety of first names - never use Luna, Emma, or repeat any name. Make every name unique and diverse. The other 50% can be creative usernames (tech_guru_22, Moon_Walker, Innovator, R3view3r). Requirements: all usernames must be 3-30 characters, use only letters, numbers, underscores, hyphens, dots, or spaces, and must not repeat supplied examples. Do NOT output nested arrays or trailing commas; if you cannot meet constraints, return an empty array []. Output only the JSON array.";
         $body = array(
             'model' => $model,
             'messages' => array(
@@ -520,7 +520,7 @@ class ARG_LLM {
                                 $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $it);
                                 $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                                 $norm = preg_replace('/^[\.\-_]+/', '', $norm);
-                                $norm = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $norm);
+                                $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);
                                 $norm = trim( $norm );
                                 if ( strlen( $norm ) >= 3 && strlen( $norm ) <= 30 ) { $candidates[] = $norm; }
                             }
@@ -535,7 +535,7 @@ class ARG_LLM {
                                 $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $it);
                                 $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                                 $norm = preg_replace('/^[\.\-_]+/', '', $norm);
-                                $norm = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $norm);
+                                $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);
                                 $norm = trim( $norm );
                                 if ( strlen( $norm ) >= 3 && strlen( $norm ) <= 30 ) { $candidates[] = $norm; }
                             }
@@ -553,7 +553,7 @@ class ARG_LLM {
                                 $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $t);
                                 $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                                 $norm = preg_replace('/^[\.\-_]+/', '', $norm);
-                                $norm = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $norm);
+                                $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);
                                 $norm = trim( $norm );
                                 if ( strlen( $norm ) >= 3 && strlen( $norm ) <= 30 ) { $candidates[] = $norm; }
                             }
@@ -568,7 +568,7 @@ class ARG_LLM {
                             $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $t);
                             $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                             $norm = preg_replace('/^[\.\-_]+/', '', $norm);
-                            $norm = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $norm);
+                            $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);
                             $norm = trim( $norm );
                             if ( strlen( $norm ) >= 3 && strlen( $norm ) <= 30 ) { $candidates[] = $norm; }
                         }
@@ -621,17 +621,19 @@ class ARG_LLM {
                 $u = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $u);
                 $u = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $u);
                 $u = preg_replace('/^[\.\-_]+/', '', $u);
-                // remove disallowed chars and spaces
-                $u = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $u);
-
+                // remove disallowed chars (but keep spaces)
+                $u = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $u);                // Convert underscores to spaces in what appears to be human names (letters, spaces, dots only - no numbers)
+                if ( preg_match('/^[A-Za-z\s._-]+$/', $u) && strpos($u, '_') !== false ) {
+                    $u = str_replace('_', ' ', $u);
+                }
                 if ( strlen( $u ) < 3 || strlen( $u ) > 30 ) {
                     $rejected_counts['invalid_length']++;
                     if ( $u !== '' ) { $rejected_samples[] = $u; }
                     continue;
                 }
 
-                // require strict final format
-                if ( ! preg_match('/^[A-Za-z0-9_.-]{3,30}$/', $u) ) {
+                // require strict final format (allow spaces for real names)
+                if ( ! preg_match('/^[A-Za-z0-9_. -]{3,30}$/', $u) ) {
                     $rejected_counts['bad_format']++;
                     $rejected_samples[] = $u;
                     continue;
@@ -694,8 +696,8 @@ class ARG_LLM {
                 $u = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $u);
                 $u = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $u);
                 $u = preg_replace('/^[\.\-_]+/', '', $u);
-                $u = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $u);
-                if ( strlen( $u ) >= 3 && strlen( $u ) <= 30 && preg_match('/^[A-Za-z0-9_.-]{3,30}$/', $u) && ! preg_match('/[._\-]{2,}/', $u) ) {
+                $u = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $u);
+                if ( strlen( $u ) >= 3 && strlen( $u ) <= 30 && preg_match('/^[A-Za-z0-9_. -]{3,30}$/', $u) && ! preg_match('/[._\-]{2,}/', $u) ) {
                     $cross_possible[] = $u;
                 }
             }
