@@ -126,12 +126,26 @@ class ARG_Core {
         $comment_author = $enable_live ? 'Automated Review' : 'Automated Review (test)';
         $comment_approved = $enable_live ? 1 : 0;
 
+        // Determine comment content (LLM if enabled and available)
+        $comment_content = isset( $opts['review_prompt'] ) && ! empty( $opts['review_prompt'] ) ? sanitize_text_field( $opts['review_prompt'] ) : 'This is just a test review.';
+        $llm_used = false;
+        if ( ! empty( $opts['enable_llm'] ) ) {
+            $product = get_post( $product_id );
+            $paraphrase_count = isset( $opts['paraphrase_count'] ) ? max(1, intval( $opts['paraphrase_count'] ) ) : 1;
+            $generated = ARG_LLM::generate_reviews_for_rating( $product, $rating, $paraphrase_count );
+            if ( $generated && is_array( $generated ) && ! empty( $generated ) ) {
+                // pick one at random
+                $comment_content = $generated[ array_rand( $generated ) ];
+                $llm_used = true;
+            }
+        }
+
         // Build comment
         $comment = array(
             'comment_post_ID'      => $product_id,
             'comment_author'       => $comment_author,
             'comment_author_email' => '',
-            'comment_content'      => 'This is just a test review.',
+            'comment_content'      => $comment_content,
             'comment_type'         => 'review',
             'comment_approved'     => $comment_approved,
             'user_id'              => 0,
@@ -143,6 +157,12 @@ class ARG_Core {
             add_comment_meta( $comment_id, 'rating', (string) $rating, true );
             add_comment_meta( $comment_id, 'arg_generated', '1', true );
             add_comment_meta( $comment_id, 'arg_test', $enable_live ? '0' : '1', true );
+            if ( $llm_used ) {
+                add_comment_meta( $comment_id, 'arg_llm', '1', true );
+                if ( ! empty( $opts['model'] ) ) {
+                    add_comment_meta( $comment_id, 'arg_llm_model', sanitize_text_field( $opts['model'] ), true );
+                }
+            }
             update_post_meta( $product_id, 'arg_last_post_date', current_time( 'mysql' ) );
             return $comment_id;
         }

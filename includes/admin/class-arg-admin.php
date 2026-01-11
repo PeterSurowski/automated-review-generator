@@ -126,6 +126,92 @@ class ARG_Admin {
             'arg-admin',
             'arg_main_section'
         );
+
+        // Example reviews per star rating
+        add_settings_field(
+            'examples_5',
+            __( 'Three 5-star examples', 'automated-review-generator' ),
+            array( __CLASS__, 'field_examples_5' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+        add_settings_field(
+            'examples_4',
+            __( 'Three 4-star examples', 'automated-review-generator' ),
+            array( __CLASS__, 'field_examples_4' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+        add_settings_field(
+            'examples_3',
+            __( 'Three 3-star examples', 'automated-review-generator' ),
+            array( __CLASS__, 'field_examples_3' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+        add_settings_field(
+            'examples_2',
+            __( 'Three 2-star examples', 'automated-review-generator' ),
+            array( __CLASS__, 'field_examples_2' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+        add_settings_field(
+            'examples_1',
+            __( 'Three 1-star examples', 'automated-review-generator' ),
+            array( __CLASS__, 'field_examples_1' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        // Model & generation settings
+        add_settings_field(
+            'model',
+            __( 'Model name', 'automated-review-generator' ),
+            array( __CLASS__, 'field_model' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'temperature',
+            __( 'Temperature', 'automated-review-generator' ),
+            array( __CLASS__, 'field_temperature' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'max_tokens',
+            __( 'Max tokens', 'automated-review-generator' ),
+            array( __CLASS__, 'field_max_tokens' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'forbidden_content',
+            __( 'Forbidden phrases', 'automated-review-generator' ),
+            array( __CLASS__, 'field_forbidden_content' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'llm_include_short_description',
+            __( 'Include product short description', 'automated-review-generator' ),
+            array( __CLASS__, 'field_llm_include_short_description' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'llm_description_max_chars',
+            __( 'Max description chars', 'automated-review-generator' ),
+            array( __CLASS__, 'field_llm_description_max_chars' ),
+            'arg-admin',
+            'arg_main_section'
+        );
     }
 
     public static function section_cb() {
@@ -267,6 +353,112 @@ class ARG_Admin {
         );
     }
 
+    // Example reviews per rating (admin supplies three examples per star rating)
+    public static function field_examples_for_rating( $rating ) {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $key = 'examples_' . intval( $rating );
+        $val = isset( $opts[ $key ] ) ? $opts[ $key ] : '';
+        printf(
+            '<textarea name="%1$s[%4$s]" rows="6" cols="60" class="large-text code">%2$s</textarea>'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_textarea( $val ),
+            esc_html__( 'Provide three example reviews of this star rating (one per paragraph). Use them as style examples for the model.', 'automated-review-generator' ),
+            esc_attr( $key )
+        );
+    }
+
+    public static function field_examples_5() { self::field_examples_for_rating(5); }
+    public static function field_examples_4() { self::field_examples_for_rating(4); }
+    public static function field_examples_3() { self::field_examples_for_rating(3); }
+    public static function field_examples_2() { self::field_examples_for_rating(2); }
+    public static function field_examples_1() { self::field_examples_for_rating(1); }
+
+    public static function field_llm_api_base() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['llm_api_base'] ) ? $opts['llm_api_base'] : self::get_defaults()['llm_api_base'];
+        printf(
+            '<input name="%1$s[llm_api_base]" type="url" value="%2$s" class="regular-text" />'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_attr( $val ),
+            esc_html__( 'Base URL for custom OpenAI-compatible API endpoints (leave empty to use OpenAI API).', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_model() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['model'] ) ? $opts['model'] : self::get_defaults()['model'];
+        printf(
+            '<input name="%1$s[model]" type="text" value="%2$s" class="regular-text" />'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_attr( $val ),
+            esc_html__( 'Model name for OpenAI-compatible APIs (e.g., gpt-3.5-turbo).', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_temperature() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['temperature'] ) ? floatval( $opts['temperature'] ) : self::get_defaults()['temperature'];
+        printf(
+            '<input name="%1$s[temperature]" type="number" min="0" max="1" step="0.05" value="%2$s" class="small-text" />'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_attr( $val ),
+            esc_html__( 'Sampling temperature for the model (0.0–1.0). Higher = more creative.', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_max_tokens() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['max_tokens'] ) ? intval( $opts['max_tokens'] ) : self::get_defaults()['max_tokens'];
+        printf(
+            '<input name="%1$s[max_tokens]" type="number" min="16" max="2048" step="1" value="%2$s" class="small-text" />'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_attr( $val ),
+            esc_html__( 'Maximum tokens to request from the model for each generation (controls length).', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_forbidden_content() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['forbidden_content'] ) ? $opts['forbidden_content'] : '';
+        printf(
+            '<textarea name="%1$s[forbidden_content]" rows="3" cols="60" class="large-text code">%2$s</textarea>'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_textarea( $val ),
+            esc_html__( 'Comma-separated phrases that must NOT appear in generated reviews (e.g., "AI-generated", "do not buy"). The system will try to reject outputs containing these.', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_llm_include_short_description() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = ! empty( $opts['llm_include_short_description'] );
+        printf(
+            '<label><input name="%1$s[llm_include_short_description]" type="checkbox" value="1" %2$s /> %3$s</label>'
+            . '<p class="description">%4$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            checked( 1, $val, false ),
+            esc_html__( 'Include the short product description (excerpt) in the LLM prompt to make reviews product-specific.', 'automated-review-generator' ),
+            esc_html__( 'This will be sanitized and truncated to avoid token bloat and remove PII (emails/phone numbers will be redacted). Enabling may increase API costs.', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_llm_description_max_chars() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['llm_description_max_chars'] ) ? intval( $opts['llm_description_max_chars'] ) : self::get_defaults()['llm_description_max_chars'];
+        printf(
+            '<input name="%1$s[llm_description_max_chars]" type="number" min="50" max="2000" step="10" value="%2$s" class="small-text" />'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_attr( $val ),
+            esc_html__( 'Maximum characters of the product description to include in prompts (sanitized). Lower numbers reduce token use and cost.', 'automated-review-generator' )
+        );
+    }
+
     public static function render_admin_page() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( esc_html__( 'Insufficient permissions', 'automated-review-generator' ) );
@@ -341,6 +533,17 @@ class ARG_Admin {
             'llm_api_key' => '',
             'llm_api_base' => '',
             'paraphrase_count' => 1,
+            'examples_5' => "Great product! Really impressed with the build quality and ease of use. Highly recommended.",
+            'examples_4' => "Very good product with minor issues. Overall satisfied and would buy again.",
+            'examples_3' => "Decent product. It works but has some limitations; consider expectations.",
+            'examples_2' => "Not great. Several issues made it hard to use; disappointing.",
+            'examples_1' => "Terrible experience — broke quickly and customer support was unhelpful.",
+            'model' => 'gpt-3.5-turbo',
+            'temperature' => 0.7,
+            'max_tokens' => 200,
+            'forbidden_content' => "AI-generated,do not buy",
+            'llm_include_short_description' => 1,
+            'llm_description_max_chars' => 300,
         );
     }
 
@@ -413,11 +616,37 @@ class ARG_Admin {
         // llm_api_base (custom OpenAI-compatible base)
         $out['llm_api_base'] = isset( $input['llm_api_base'] ) ? esc_url_raw( trim( $input['llm_api_base'] ) ) : $defaults['llm_api_base'];
 
+        // examples per rating
+        for ( $r = 1; $r <= 5; $r++ ) {
+            $k = 'examples_' . $r;
+            $out[ $k ] = isset( $input[ $k ] ) ? sanitize_textarea_field( $input[ $k ] ) : $defaults[ $k ];
+        }
+
+        // model, temperature, max_tokens, forbidden_content
+        $out['model'] = isset( $input['model'] ) ? sanitize_text_field( $input['model'] ) : $defaults['model'];
+        $out['temperature'] = isset( $input['temperature'] ) ? floatval( $input['temperature'] ) : $defaults['temperature'];
+        if ( $out['temperature'] < 0 ) { $out['temperature'] = 0; }
+        if ( $out['temperature'] > 1 ) { $out['temperature'] = 1; }
+        $out['max_tokens'] = isset( $input['max_tokens'] ) ? intval( $input['max_tokens'] ) : $defaults['max_tokens'];
+        if ( $out['max_tokens'] < 16 ) { $out['max_tokens'] = 16; }
+        if ( $out['max_tokens'] > 2048 ) { $out['max_tokens'] = 2048; }
+        $out['forbidden_content'] = isset( $input['forbidden_content'] ) ? sanitize_textarea_field( $input['forbidden_content'] ) : $defaults['forbidden_content'];
+
+
         // paraphrase_count
         $pc = isset( $input['paraphrase_count'] ) ? intval( $input['paraphrase_count'] ) : $defaults['paraphrase_count'];
         if ( $pc < 1 ) { $pc = 1; }
         if ( $pc > 5 ) { $pc = 5; }
         $out['paraphrase_count'] = $pc;
+
+        // llm_include_short_description
+        $out['llm_include_short_description'] = ( isset( $input['llm_include_short_description'] ) && $input['llm_include_short_description'] ) ? 1 : 0;
+
+        // llm_description_max_chars (50-2000)
+        $desc_max = isset( $input['llm_description_max_chars'] ) ? intval( $input['llm_description_max_chars'] ) : $defaults['llm_description_max_chars'];
+        if ( $desc_max < 50 ) { $desc_max = 50; }
+        if ( $desc_max > 2000 ) { $desc_max = 2000; }
+        $out['llm_description_max_chars'] = $desc_max;
 
         // Trigger an action so other components can react to option changes (reschedule cron, etc.)
         do_action( 'arg_options_saved', $out );
