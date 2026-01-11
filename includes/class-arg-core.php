@@ -165,12 +165,21 @@ class ARG_Core {
             add_comment_meta( $comment_id, 'rating', (string) $rating, true );
             add_comment_meta( $comment_id, 'arg_generated', '1', true );
             add_comment_meta( $comment_id, 'arg_test', $enable_live ? '0' : '1', true );
+
             if ( $llm_used ) {
                 add_comment_meta( $comment_id, 'arg_llm', '1', true );
                 if ( ! empty( $opts['model'] ) ) {
                     add_comment_meta( $comment_id, 'arg_llm_model', sanitize_text_field( $opts['model'] ), true );
                 }
             }
+
             if ( ! empty( $llm_user_used ) ) {
                 add_comment_meta( $comment_id, 'arg_llm_user', '1', true );
             }
+
+            return $comment_id;
+        }
+
+        return false;
+    }
+}
