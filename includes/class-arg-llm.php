@@ -160,6 +160,115 @@ class ARG_LLM {
         return $results;
     }
 
+    /**
+     * Generate usernames based on admin-provided examples. Returns array of usernames or false.
+     */
+    public static function generate_usernames( $count = 1 ) {
+        $opts = get_option( 'arg_options', array() );
+        if ( empty( $opts['enable_llm'] ) || empty( $opts['llm_provider'] ) || 'openai' !== $opts['llm_provider'] ) {
+            return false;
+        }
+
+        $api_key = isset( $opts['llm_api_key'] ) ? $opts['llm_api_key'] : '';
+        if ( empty( $api_key ) ) {
+            update_option( 'arg_last_llm_error', 'No API key configured' );
+            return false;
+        }
+
+        $model = isset( $opts['model'] ) ? $opts['model'] : 'gpt-3.5-turbo';
+        $temperature = isset( $opts['temperature'] ) ? floatval( $opts['temperature'] ) : 0.6;
+        $max_tokens = 50;
+        $forbidden = isset( $opts['forbidden_content'] ) ? $opts['forbidden_content'] : '';
+
+        $examples_raw = isset( $opts['username_examples'] ) ? $opts['username_examples'] : '';
+        $examples = self::parse_examples( $examples_raw );
+
+        $system = "You are a helpful assistant that invents short, realistic usernames for product reviews. Avoid profanity and personal data. Output only the usernames, one per line, with no extra text.";
+
+        $user_msg = "Here are example usernames (do not repeat them verbatim):\n";
+        foreach ( $examples as $i => $ex ) {
+            $user_msg .= "Example " . ( $i + 1 ) . ": " . $ex . "\n";
+        }
+        $user_msg .= "\nTask: Generate " . intval( $count ) . " unique usernames similar in style to the examples. Return them as a newline-separated list with no extra commentary. Use letters, numbers, underscores or hyphens only, 3-30 characters long.";
+
+        $body = array(
+            'model' => $model,
+            'messages' => array(
+                array( 'role' => 'system', 'content' => $system ),
+                array( 'role' => 'user', 'content' => $user_msg ),
+            ),
+            'temperature' => $temperature,
+            'max_tokens' => $max_tokens,
+            'n' => 1,
+        );
+
+        $api_base = isset( $opts['llm_api_base'] ) && ! empty( $opts['llm_api_base'] ) ? rtrim( $opts['llm_api_base'], '\\/' ) : 'https://api.openai.com';
+        $url = $api_base . '/v1/chat/completions';
+
+        $headers = array(
+            'Authorization' => 'Bearer ' . $api_key,
+            'Content-Type'  => 'application/json',
+        );
+
+        $resp = wp_remote_post( $url, array( 'headers' => $headers, 'body' => wp_json_encode( $body ), 'timeout' => 30 ) );
+
+        if ( is_wp_error( $resp ) ) {
+            update_option( 'arg_last_llm_error', $resp->get_error_message() );
+            return false;
+        }
+
+        $code = intval( $resp['response']['code'] );
+        if ( $code >= 400 ) {
+            $body_msg = isset( $resp['body'] ) ? $resp['body'] : ''; 
+            update_option( 'arg_last_llm_error', 'HTTP ' . $code . ': ' . substr( $body_msg, 0, 200 ) );
+            return false;
+        }
+
+        $data = json_decode( $resp['body'], true );
+        if ( empty( $data ) || empty( $data['choices'] ) ) {
+            update_option( 'arg_last_llm_error', 'Invalid response structure' );
+            return false;
+        }
+
+        $results = array();
+        foreach ( $data['choices'] as $choice ) {
+            $text = '';
+            if ( isset( $choice['message']['content'] ) ) {
+                $text = trim( $choice['message']['content'] );
+            } elseif ( isset( $choice['text'] ) ) {
+                $text = trim( $choice['text'] );
+            } else {
+                continue;
+            }
+
+            $lines = preg_split('/\r?\n|,/', $text);
+            foreach ( $lines as $line ) {
+                $u = trim( $line );
+                $u = trim( $u, " \t\n\r\0\x0B\"'•-–—" );
+                $u = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $u);
+                if ( strlen( $u ) < 3 || strlen( $u ) > 30 ) { continue; }
+                $lower = strtolower( $u );
+                if ( ! empty( $forbidden ) ) {
+                    $phrases = array_map( 'trim', explode( ',', strtolower( $forbidden ) ) );
+                    $bad = false;
+                    foreach ( $phrases as $p ) {
+                        if ( $p !== '' && strpos( $lower, $p ) !== false ) { $bad = true; break; }
+                    }
+                    if ( $bad ) { continue; }
+                }
+                $results[] = $u;
+            }
+        }
+
+        if ( empty( $results ) ) {
+            update_option( 'arg_last_llm_error', 'No valid usernames generated' );
+            return false;
+        }
+
+        $results = array_values( array_unique( $results ) );
+        return array_slice( $results, 0, max( 1, intval( $count ) ) );
+    }
+
     private static function parse_examples( $raw ) {
         $parts = preg_split( '/\r?\n\s*\r?\n|\r?\n/', trim( $raw ) );
         $out = array();

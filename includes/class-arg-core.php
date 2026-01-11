@@ -129,6 +129,7 @@ class ARG_Core {
         // Determine comment content (LLM if enabled and available)
         $comment_content = isset( $opts['review_prompt'] ) && ! empty( $opts['review_prompt'] ) ? sanitize_text_field( $opts['review_prompt'] ) : 'This is just a test review.';
         $llm_used = false;
+        $llm_user_used = false;
         if ( ! empty( $opts['enable_llm'] ) ) {
             $product = get_post( $product_id );
             $paraphrase_count = isset( $opts['paraphrase_count'] ) ? max(1, intval( $opts['paraphrase_count'] ) ) : 1;
@@ -137,6 +138,13 @@ class ARG_Core {
                 // pick one at random
                 $comment_content = $generated[ array_rand( $generated ) ];
                 $llm_used = true;
+            }
+
+            // Attempt to generate a display username (one per review) using the username_examples
+            $usernames = ARG_LLM::generate_usernames( 1 );
+            if ( $usernames && is_array( $usernames ) && ! empty( $usernames[0] ) ) {
+                $comment_author = sanitize_text_field( $usernames[0] );
+                $llm_user_used = true;
             }
         }
 
@@ -163,10 +171,6 @@ class ARG_Core {
                     add_comment_meta( $comment_id, 'arg_llm_model', sanitize_text_field( $opts['model'] ), true );
                 }
             }
-            update_post_meta( $product_id, 'arg_last_post_date', current_time( 'mysql' ) );
-            return $comment_id;
-        }
-
-        return false;
-    }
-}
+            if ( ! empty( $llm_user_used ) ) {
+                add_comment_meta( $comment_id, 'arg_llm_user', '1', true );
+            }

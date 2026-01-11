@@ -212,6 +212,14 @@ class ARG_Admin {
             'arg-admin',
             'arg_main_section'
         );
+
+        add_settings_field(
+            'username_examples',
+            __( 'Example usernames', 'automated-review-generator' ),
+            array( __CLASS__, 'field_username_examples' ),
+            'arg-admin',
+            'arg_main_section'
+        );
     }
 
     public static function section_cb() {
@@ -447,6 +455,18 @@ class ARG_Admin {
         );
     }
 
+    public static function field_username_examples() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['username_examples'] ) ? $opts['username_examples'] : self::get_defaults()['username_examples'];
+        printf(
+            '<textarea name="%1$s[username_examples]" rows="10" cols="60" class="large-text code">%2$s</textarea>'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_textarea( $val ),
+            esc_html__( 'Provide about 10 example usernames, one per line. These guide the LLM to create new usernames; avoid real personal data.', 'automated-review-generator' )
+        );
+    }
+
     public static function render_admin_page() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( esc_html__( 'Insufficient permissions', 'automated-review-generator' ) );
@@ -532,6 +552,7 @@ class ARG_Admin {
             'forbidden_content' => "AI-generated,do not buy",
             'llm_include_short_description' => 1,
             'llm_description_max_chars' => 300,
+            'username_examples' => "happybuyer\ntechfan42\nshopperjoe\nlovely_lucy\nreviewer_77\nmiker\nanna89\nsparkle85\nclever_cat\njane_doe9",
         );
     }
 
@@ -635,6 +656,9 @@ class ARG_Admin {
         if ( $desc_max < 50 ) { $desc_max = 50; }
         if ( $desc_max > 2000 ) { $desc_max = 2000; }
         $out['llm_description_max_chars'] = $desc_max;
+
+        // username_examples: textarea, one per line
+        $out['username_examples'] = isset( $input['username_examples'] ) ? sanitize_textarea_field( $input['username_examples'] ) : $defaults['username_examples'];
 
         // Trigger an action so other components can react to option changes (reschedule cron, etc.)
         do_action( 'arg_options_saved', $out );
