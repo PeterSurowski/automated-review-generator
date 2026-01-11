@@ -414,6 +414,10 @@ class ARG_LLM {
         // fallback indicators
         $fallback_used = false;
         $raw_fallback_used = false;
+        // If the model returned a JSON array inside its text, collect it here and prefer it
+        $json_arrays_found = array();
+        $used_model_array = false;
+        $http_transport_missing = false;
         // track rejections for diagnostics
         $rejected_counts = array(
             'invalid_length' => 0,
@@ -443,6 +447,10 @@ class ARG_LLM {
                 $resp = wp_remote_post( $url, array( 'headers' => $headers, 'body' => wp_json_encode( $body ), 'timeout' => 30 ) );
                 if ( is_wp_error( $resp ) ) {
                     $last_error = $resp->get_error_message();
+                    if ( stripos( $last_error, 'No working transports found' ) !== false ) {
+                        $last_error .= ' — PHP has no available HTTP transports. Ensure curl (php_curl) and openssl (php_openssl) are enabled, and that allow_url_fopen is on; then restart your web/PHP service (MAMP).';
+                        $http_transport_missing = true;
+                    }
                     continue;
                 }
             }
@@ -494,6 +502,8 @@ class ARG_LLM {
                         if ( substr_count( $repair, '"' ) % 2 != 0 ) { $repair .= '"'; }
                         $json = json_decode( $repair, true );
                         if ( is_array( $json ) ) {
+                            // remember raw JSON arrays found for preference later
+                            $json_arrays_found[] = $json;
                             foreach ( $json as $it ) {
                                 $it = trim( (string) $it );
                                 // strip common bullets (hyphen, asterisk, bullet)
@@ -574,6 +584,23 @@ class ARG_LLM {
                 $body['max_tokens'] = min( 1500, intval( $body['max_tokens'] * 2 ) );
                 $last_error = 'Truncated response; retrying with more tokens';
                 continue;
+            }
+
+            // If the model provided a JSON array, prefer those strings directly (they match the requested format)
+            if ( ! empty( $json_arrays_found ) ) {
+                $preferred = array();
+                foreach ( $json_arrays_found as $ja ) {
+                    foreach ( (array) $ja as $v ) {
+                        $v = trim( (string) $v );
+                        if ( $v === '' ) { continue; }
+                        $preferred[] = $v;
+                    }
+                }
+                $preferred = array_values( array_unique( $preferred ) );
+                if ( ! empty( $preferred ) ) {
+                    $candidates = $preferred;
+                    $used_model_array = true;
+                }
             }
 
             // Sanitize and filter raw candidates
@@ -739,6 +766,8 @@ class ARG_LLM {
                     'raw_fallback_used' => ! empty( $raw_fallback_used ),
                     'raw_fallback_candidates' => isset( $raw_fallback_candidates ) ? array_slice( $raw_fallback_candidates, 0, 50 ) : array(),
                     'truncated' => ! empty( $truncated ),
+                    'http_transport_missing' => ! empty( $http_transport_missing ),
+                    'used_model_array' => ! empty( $used_model_array ),
                 );
                 update_option( 'arg_last_username_sample', $diagn );
                 return $diagn;
@@ -763,6 +792,8 @@ class ARG_LLM {
                 'fallback_used' => ! empty( $fallback_used ),
                 'raw_fallback_used' => ! empty( $raw_fallback_used ),
                 'raw_fallback_candidates' => isset( $raw_fallback_candidates ) ? array_slice( $raw_fallback_candidates, 0, 50 ) : array(),
+                'http_transport_missing' => ! empty( $http_transport_missing ),
+                'used_model_array' => ! empty( $used_model_array ),
             );
             update_option( 'arg_last_username_sample', $diagn );
             return $diagn;

@@ -496,6 +496,13 @@ class ARG_Admin {
         echo '<button type="submit" class="button button-secondary">' . esc_html__( 'Test LLM connection', 'automated-review-generator' ) . '</button>';
         echo '</form>';
 
+        // Quick HTTP transport check
+        echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;margin-right:1em;">';
+        echo '<input type="hidden" name="action" value="arg_check_http_transport" />';
+        wp_nonce_field( 'arg_check_http_action', 'arg_check_http_nonce' );
+        echo '<button type="submit" class="button button-secondary">' . esc_html__( 'Check HTTP transport', 'automated-review-generator' ) . '</button>';
+        echo '</form>';
+
         // Generate username sample form
         echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;margin-right:1em;">';
         echo '<input type="hidden" name="action" value="arg_generate_usernames_sample" />';
@@ -512,6 +519,17 @@ class ARG_Admin {
                 echo '<div class="updated notice"><p>' . esc_html__( 'LLM connection succeeded:', 'automated-review-generator' ) . ' ' . esc_html( $msg ) . '</p></div>';
             } else {
                 echo '<div class="error notice"><p>' . esc_html__( 'LLM connection failed:', 'automated-review-generator' ) . ' ' . esc_html( $msg ) . '</p></div>';
+            }
+        }
+
+        // Show quick HTTP transport check result
+        if ( isset( $_GET['arg_check_http'] ) ) {
+            $ok = '1' === $_GET['arg_check_http'];
+            $msg = isset( $_GET['arg_check_msg'] ) ? urldecode( $_GET['arg_check_msg'] ) : '';
+            if ( $ok ) {
+                echo '<div class="updated notice"><p>' . esc_html__( 'HTTP transport check:', 'automated-review-generator' ) . ' ' . esc_html( $msg ) . '</p></div>';
+            } else {
+                echo '<div class="error notice"><p><strong>' . esc_html__( 'HTTP transport check failed:', 'automated-review-generator' ) . '</strong> ' . esc_html( $msg ) . '</p></div>';
             }
         }
 
@@ -570,12 +588,23 @@ class ARG_Admin {
             if ( isset( $sample['raw_fallback_used'] ) ) {
                 echo '<p><strong>' . esc_html__( 'Raw fallback used:', 'automated-review-generator' ) . '</strong> ' . ( $sample['raw_fallback_used'] ? esc_html__( 'Yes', 'automated-review-generator' ) : esc_html__( 'No', 'automated-review-generator' ) ) . '</p>';
             }
+            if ( isset( $sample['used_model_array'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Used model array:', 'automated-review-generator' ) . '</strong> ' . ( $sample['used_model_array'] ? esc_html__( 'Yes', 'automated-review-generator' ) : esc_html__( 'No', 'automated-review-generator' ) ) . '</p>';
+            }
             if ( isset( $sample['raw_fallback_candidates'] ) && is_array( $sample['raw_fallback_candidates'] ) && ! empty( $sample['raw_fallback_candidates'] ) ) {
                 echo '<p><strong>' . esc_html__( 'Raw fallback candidates (sample):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', array_slice( $sample['raw_fallback_candidates'], 0, 50 ) ) ) . '</code></p>';
             }
             if ( isset( $sample['http_response'] ) && $sample['http_response'] !== '' ) {
                 echo '<p><strong>' . esc_html__( 'HTTP response (truncated):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( $sample['http_response'] ) . '</code></p>';
             }
+
+            // Helpful troubleshooting when WP HTTP transports are missing
+            if ( isset( $sample['http_transport_missing'] ) && $sample['http_transport_missing'] ) {
+                echo '<div class="error notice" style="margin-top:8px;padding:10px;">';
+                echo '<p><strong>' . esc_html__( 'HTTP transport missing:', 'automated-review-generator' ) . '</strong> ' . esc_html__( 'PHP has no available HTTP transports. On MAMP/Local, enable the php_curl and php_openssl extensions and set allow_url_fopen=On in your php.ini, then restart MAMP/Apache/PHP-FPM. After that retry the sample.', 'automated-review-generator' ) . '</p>';
+                echo '</div>';
+            }
+
             echo '</div>';
         }
 
