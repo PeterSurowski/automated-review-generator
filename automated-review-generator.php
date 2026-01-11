@@ -23,6 +23,14 @@ define( 'ARG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 if ( file_exists( ARG_PLUGIN_DIR . 'includes/class-arg-core.php' ) ) {
     require_once ARG_PLUGIN_DIR . 'includes/class-arg-core.php';
 }
+// Admin UI
+if ( file_exists( ARG_PLUGIN_DIR . 'includes/admin/class-arg-admin.php' ) ) {
+    require_once ARG_PLUGIN_DIR . 'includes/admin/class-arg-admin.php';
+}
+// LLM handler (pseudo-code)
+if ( file_exists( ARG_PLUGIN_DIR . 'includes/class-arg-llm.php' ) ) {
+    require_once ARG_PLUGIN_DIR . 'includes/class-arg-llm.php';
+}
 
 /**
  * Activation hook
@@ -45,3 +53,11 @@ register_deactivation_hook( __FILE__, 'arg_deactivate' );
 if ( class_exists( 'ARG_Core' ) ) {
     ARG_Core::instance();
 }
+
+// Add Settings link on the Plugins page for quick access
+function arg_plugin_action_links( $links ) {
+    $settings_link = '<a href="' . esc_url( admin_url( 'admin.php?page=arg-admin' ) ) . '">' . esc_html__( 'Settings', 'automated-review-generator' ) . '</a>';
+    array_unshift( $links, $settings_link );
+    return $links;
+}
+add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'arg_plugin_action_links' );

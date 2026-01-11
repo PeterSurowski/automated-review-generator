@@ -1,0 +1,1 @@
+Write a 120–160 word product review for {{product_name}} focusing on {{features}}. Tone: {{tone}}. Include a short 1-line summary and a 1–5 rating. Make it natural and useful for shoppers.
