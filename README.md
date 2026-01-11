@@ -20,6 +20,12 @@ Fields:
 - `Negative review percentage` — integer percentage `0`–`100`, **default:** `5`. Percentage of reviews that should be low-rated to make the distribution realistic.
 - `Review prompt / guidance` — freeform textarea, **default:** a short guidance prompt. This text is used to instruct the review generation model on tone, points to mention, and length.
 
+LLM / API usage
+---------------
+
+- The plugin supports **API-based** LLM paraphrase generation. By default it uses an OpenAI-compatible API. You can also select **Custom API base** and provide a base URL for other OpenAI-compatible endpoints.
+- The plugin includes a **Test LLM connection** button to verify connectivity to the chosen provider.
+
 Safety & test mode
 ------------------
 

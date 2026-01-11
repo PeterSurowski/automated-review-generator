@@ -103,3 +103,59 @@ function arg_handle_run_now() {
     exit;
 }
 add_action( 'admin_post_arg_run_now', 'arg_handle_run_now' );
+
+// Handle LLM connection test via admin-post.php
+function arg_handle_test_llm() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( esc_html__( 'Insufficient permissions', 'automated-review-generator' ) );
+    }
+
+    check_admin_referer( 'arg_test_llm_action', 'arg_test_llm_nonce' );
+
+    $opts = get_option( 'arg_options', array() );
+    $msg = '';
+    $ok = false;
+
+    // If custom API base configured and provider set to custom, test it
+    if ( ! empty( $opts['llm_api_base'] ) && 'custom' === ( $opts['llm_provider'] ?? '' ) ) {
+        $url = rtrim( $opts['llm_api_base'], "\/");
+
+        // First try a simple GET
+        $resp = wp_remote_get( $url, array( 'timeout' => 5 ) );
+        if ( ! is_wp_error( $resp ) && isset( $resp['response'] ) && intval( $resp['response']['code'] ) < 400 ) {
+            $ok = true;
+            $msg = esc_html__( 'Custom API base reachable (GET)', 'automated-review-generator' );
+        } else {
+            // Try a lightweight POST (JSON)
+            $body = wp_json_encode( array( 'prompt' => 'Test connection', 'max_tokens' => 8 ) );
+            $resp = wp_remote_post( $url, array( 'timeout' => 5, 'body' => $body, 'headers' => array( 'Content-Type' => 'application/json' ) ) );
+            if ( ! is_wp_error( $resp ) && isset( $resp['response'] ) && intval( $resp['response']['code'] ) < 400 ) {
+                $ok = true;
+                $msg = esc_html__( 'Custom API base reachable (POST)', 'automated-review-generator' );
+            } else {
+                $ok = false;
+                $msg = is_wp_error( $resp ) ? $resp->get_error_message() : ( isset( $resp['response']['code'] ) ? 'HTTP ' . intval( $resp['response']['code'] ) : esc_html__( 'No response', 'automated-review-generator' ) );
+            }
+        }
+    } elseif ( ! empty( $opts['llm_provider'] ) && 'openai' === $opts['llm_provider'] && ! empty( $opts['llm_api_key'] ) ) {
+        // Try simple OpenAI-compatible test (models list)
+        $resp = wp_remote_get( 'https://api.openai.com/v1/models', array( 'headers' => array( 'Authorization' => 'Bearer ' . $opts['llm_api_key'] ), 'timeout' => 6 ) );
+        if ( ! is_wp_error( $resp ) && isset( $resp['response'] ) && intval( $resp['response']['code'] ) < 400 ) {
+            $ok = true;
+            $msg = esc_html__( 'OpenAI API reachable', 'automated-review-generator' );
+        } else {
+            $ok = false;
+            $msg = is_wp_error( $resp ) ? $resp->get_error_message() : ( isset( $resp['response']['code'] ) ? 'HTTP ' . intval( $resp['response']['code'] ) : esc_html__( 'No response', 'automated-review-generator' ) );
+        }
+    } else {
+        $ok = false;
+        $msg = esc_html__( 'No endpoint or provider configured', 'automated-review-generator' );
+    }
+
+    $redirect = wp_get_referer() ?: admin_url( 'admin.php?page=arg-admin' );
+    $redirect = add_query_arg( 'arg_test_llm', $ok ? '1' : '0', $redirect );
+    $redirect = add_query_arg( 'arg_test_msg', urlencode( $msg ), $redirect );
+    wp_redirect( $redirect );
+    exit;
+}
+add_action( 'admin_post_arg_test_llm', 'arg_handle_test_llm' );

@@ -85,6 +85,47 @@ class ARG_Admin {
             'arg-admin',
             'arg_main_section'
         );
+
+        // LLM settings
+        add_settings_field(
+            'enable_llm',
+            __( 'Enable LLM generation', 'automated-review-generator' ),
+            array( __CLASS__, 'field_enable_llm' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'llm_provider',
+            __( 'LLM provider', 'automated-review-generator' ),
+            array( __CLASS__, 'field_llm_provider' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'llm_api_key',
+            __( 'LLM API key', 'automated-review-generator' ),
+            array( __CLASS__, 'field_llm_api_key' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'llm_api_base',
+            __( 'LLM API base URL', 'automated-review-generator' ),
+            array( __CLASS__, 'field_llm_api_base' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'paraphrase_count',
+            __( 'Paraphrase count per generation', 'automated-review-generator' ),
+            array( __CLASS__, 'field_paraphrase_count' ),
+            'arg-admin',
+            'arg_main_section'
+        );
     }
 
     public static function section_cb() {
@@ -165,6 +206,67 @@ class ARG_Admin {
         );
     }
 
+    public static function field_enable_llm() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = ! empty( $opts['enable_llm'] );
+        printf(
+            '<label><input name="%1$s[enable_llm]" type="checkbox" value="1" %2$s /> %3$s</label>'
+            . '<p class="description">%4$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            checked( 1, $val, false ),
+            esc_html__( 'Enable LLM paraphrase generation for reviews (default: enabled for dev testing).', 'automated-review-generator' ),
+            esc_html__( 'If enabled, the plugin will attempt to call the configured LLM endpoint to generate review text. Disabling will fall back to deterministic text.', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_llm_provider() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['llm_provider'] ) ? $opts['llm_provider'] : self::get_defaults()['llm_provider'];
+        $providers = array( 'none' => __( 'None', 'automated-review-generator' ), 'openai' => __( 'OpenAI-compatible', 'automated-review-generator' ), 'custom' => __( 'Custom API base', 'automated-review-generator' ) );
+        echo '<select name="' . esc_attr( self::OPTION_NAME ) . '[llm_provider]">';
+        foreach ( $providers as $key => $label ) {
+            echo '<option value="' . esc_attr( $key ) . '" ' . selected( $val, $key, false ) . '>' . esc_html( $label ) . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">' . esc_html__( 'Choose how to generate paraphrases: an OpenAI-compatible API or a custom API base URL.', 'automated-review-generator' ) . '</p>';
+    }
+
+    public static function field_llm_api_key() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['llm_api_key'] ) ? $opts['llm_api_key'] : '';
+        printf(
+            '<input name="%1$s[llm_api_key]" type="password" value="%2$s" class="regular-text" />'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_attr( $val ),
+            esc_html__( 'API key for the chosen provider (if applicable). Stored in plugin options; shown as password for safety.', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_llm_api_base() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['llm_api_base'] ) ? $opts['llm_api_base'] : self::get_defaults()['llm_api_base'];
+        printf(
+            '<input name="%1$s[llm_api_base]" type="url" value="%2$s" class="regular-text" />'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_attr( $val ),
+            esc_html__( 'Base URL for custom OpenAI-compatible API endpoints (leave empty to use OpenAI API).', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_paraphrase_count() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = isset( $opts['paraphrase_count'] ) ? intval( $opts['paraphrase_count'] ) : self::get_defaults()['paraphrase_count'];
+        printf(
+            '<input name="%1$s[paraphrase_count]" type="number" min="1" max="5" value="%2$s" class="small-text" />'
+            . '<p class="description">%3$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            esc_attr( $val ),
+            esc_html__( 'Number of paraphrases to request for each generation (default 1). Higher values produce more variants but cost/latency increases.', 'automated-review-generator' )
+        );
+    }
+
     public static function render_admin_page() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( esc_html__( 'Insufficient permissions', 'automated-review-generator' ) );
@@ -185,6 +287,24 @@ class ARG_Admin {
             echo '<div class="notice notice-info"><p>' . esc_html__( 'Test mode is enabled — generated reviews will not be publicly visible by default.', 'automated-review-generator' ) . '</p></div>';
         } else {
             echo '<div class="notice notice-warning"><p>' . esc_html__( 'Live posting is ENABLED — generated reviews may appear on your site. Use only on development/staging sites unless you understand the impact.', 'automated-review-generator' ) . '</p></div>';
+        }
+
+        // LLM test form (separate)
+        echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;margin-right:1em;">';
+        echo '<input type="hidden" name="action" value="arg_test_llm" />';
+        wp_nonce_field( 'arg_test_llm_action', 'arg_test_llm_nonce' );
+        echo '<button type="submit" class="button button-secondary">' . esc_html__( 'Test LLM connection', 'automated-review-generator' ) . '</button>';
+        echo '</form>';
+
+        // Show LLM test result
+        if ( isset( $_GET['arg_test_llm'] ) ) {
+            $ok = '1' === $_GET['arg_test_llm'];
+            $msg = isset( $_GET['arg_test_msg'] ) ? urldecode( $_GET['arg_test_msg'] ) : '';
+            if ( $ok ) {
+                echo '<div class="updated notice"><p>' . esc_html__( 'LLM connection succeeded:', 'automated-review-generator' ) . ' ' . esc_html( $msg ) . '</p></div>';
+            } else {
+                echo '<div class="error notice"><p>' . esc_html__( 'LLM connection failed:', 'automated-review-generator' ) . ' ' . esc_html( $msg ) . '</p></div>';
+            }
         }
 
         // Manual run form (separate to avoid nonce collision with settings form)
@@ -216,6 +336,11 @@ class ARG_Admin {
             'review_prompt' => __( "Write a concise, helpful review (80-160 words). Mention product features, ease of use, and value for money. Keep tone friendly and realistic.", 'automated-review-generator' ),
             'enable_live_posts' => 0,
             'use_minutes' => 1,
+            'enable_llm' => 1,
+            'llm_provider' => 'openai',
+            'llm_api_key' => '',
+            'llm_api_base' => '',
+            'paraphrase_count' => 1,
         );
     }
 
@@ -274,6 +399,25 @@ class ARG_Admin {
 
         // use_minutes: boolean checkbox for dev time-scaling
         $out['use_minutes'] = ( isset( $input['use_minutes'] ) && $input['use_minutes'] ) ? 1 : 0;
+
+        // enable_llm
+        $out['enable_llm'] = ( isset( $input['enable_llm'] ) && $input['enable_llm'] ) ? 1 : 0;
+
+        // llm_provider
+        $allowed = array( 'none', 'openai', 'custom' );
+        $out['llm_provider'] = ( isset( $input['llm_provider'] ) && in_array( $input['llm_provider'], $allowed, true ) ) ? $input['llm_provider'] : $defaults['llm_provider'];
+
+        // llm_api_key
+        $out['llm_api_key'] = isset( $input['llm_api_key'] ) ? sanitize_text_field( $input['llm_api_key'] ) : $defaults['llm_api_key'];
+
+        // llm_api_base (custom OpenAI-compatible base)
+        $out['llm_api_base'] = isset( $input['llm_api_base'] ) ? esc_url_raw( trim( $input['llm_api_base'] ) ) : $defaults['llm_api_base'];
+
+        // paraphrase_count
+        $pc = isset( $input['paraphrase_count'] ) ? intval( $input['paraphrase_count'] ) : $defaults['paraphrase_count'];
+        if ( $pc < 1 ) { $pc = 1; }
+        if ( $pc > 5 ) { $pc = 5; }
+        $out['paraphrase_count'] = $pc;
 
         // Trigger an action so other components can react to option changes (reschedule cron, etc.)
         do_action( 'arg_options_saved', $out );
