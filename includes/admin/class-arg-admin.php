@@ -517,7 +517,12 @@ class ARG_Admin {
 
         // Show notice after generating a username sample
         if ( isset( $_GET['arg_username_sample'] ) ) {
-            echo '<div class="updated notice"><p>' . esc_html__( 'Username sample generated. Check the diagnostic box below for raw and final candidates.', 'automated-review-generator' ) . '</p></div>';
+            $last_err = get_option( 'arg_last_llm_error' );
+            if ( ! empty( $last_err ) ) {
+                echo '<div class="error notice"><p><strong>' . esc_html__( 'LLM error while generating sample:', 'automated-review-generator' ) . '</strong> ' . esc_html( $last_err ) . '</p></div>';
+            } else {
+                echo '<div class="updated notice"><p>' . esc_html__( 'Username sample generated. Check the diagnostic box below for raw and final candidates.', 'automated-review-generator' ) . '</p></div>';
+            }
         }
 
         // Show last username sample (diagnostics)
@@ -533,6 +538,43 @@ class ARG_Admin {
             }
             if ( isset( $sample['attempts'] ) ) {
                 echo '<p><em>' . sprintf( esc_html__( 'Attempts: %s', 'automated-review-generator' ), esc_html( $sample['attempts'] ) ) . '</em></p>';
+            }
+            if ( isset( $sample['fallback_used'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Fallback used:', 'automated-review-generator' ) . '</strong> ' . ( $sample['fallback_used'] ? esc_html__( 'Yes', 'automated-review-generator' ) : esc_html__( 'No', 'automated-review-generator' ) ) . '</p>';
+            }
+            if ( isset( $sample['truncated'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Truncated response:', 'automated-review-generator' ) . '</strong> ' . ( $sample['truncated'] ? esc_html__( 'Yes', 'automated-review-generator' ) : esc_html__( 'No', 'automated-review-generator' ) ) . '</p>';
+            }
+            if ( isset( $sample['rejected'] ) && is_array( $sample['rejected'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Rejected counts:', 'automated-review-generator' ) . '</strong> <code>' . esc_html( json_encode( $sample['rejected'] ) ) . '</code></p>';
+            }
+            if ( isset( $sample['rejected_samples'] ) && is_array( $sample['rejected_samples'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Rejected samples:', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', array_slice( $sample['rejected_samples'], 0, 50 ) ) ) . '</code></p>';
+            }
+            if ( isset( $sample['model_texts'] ) && is_array( $sample['model_texts'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Model texts (sample):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ' || ', array_slice( $sample['model_texts'], 0, 3 ) ) ) . '</code></p>';
+            }
+            if ( isset( $sample['clean'] ) && is_array( $sample['clean'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Cleaned candidates (last attempt):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', array_slice( $sample['clean'], 0, 50 ) ) ) . '</code></p>';
+            }
+            if ( isset( $sample['buckets'] ) && is_array( $sample['buckets'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Bucket counts:', 'automated-review-generator' ) . '</strong> <code>' . esc_html( json_encode( $sample['buckets'] ) ) . '</code></p>';
+            }
+            if ( isset( $sample['buckets_samples'] ) && is_array( $sample['buckets_samples'] ) ) {
+                $parts = array();
+                foreach ( $sample['buckets_samples'] as $k => $vals ) {
+                    $parts[] = $k . ':' . implode('|', $vals);
+                }
+                echo '<p><strong>' . esc_html__( 'Bucket examples:', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ' || ', $parts ) ) . '</code></p>';
+            }
+            if ( isset( $sample['raw_fallback_used'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Raw fallback used:', 'automated-review-generator' ) . '</strong> ' . ( $sample['raw_fallback_used'] ? esc_html__( 'Yes', 'automated-review-generator' ) : esc_html__( 'No', 'automated-review-generator' ) ) . '</p>';
+            }
+            if ( isset( $sample['raw_fallback_candidates'] ) && is_array( $sample['raw_fallback_candidates'] ) && ! empty( $sample['raw_fallback_candidates'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Raw fallback candidates (sample):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', array_slice( $sample['raw_fallback_candidates'], 0, 50 ) ) ) . '</code></p>';
+            }
+            if ( isset( $sample['http_response'] ) && $sample['http_response'] !== '' ) {
+                echo '<p><strong>' . esc_html__( 'HTTP response (truncated):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( $sample['http_response'] ) . '</code></p>';
             }
             echo '</div>';
         }
