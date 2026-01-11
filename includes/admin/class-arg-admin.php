@@ -374,18 +374,6 @@ class ARG_Admin {
     public static function field_examples_2() { self::field_examples_for_rating(2); }
     public static function field_examples_1() { self::field_examples_for_rating(1); }
 
-    public static function field_llm_api_base() {
-        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
-        $val  = isset( $opts['llm_api_base'] ) ? $opts['llm_api_base'] : self::get_defaults()['llm_api_base'];
-        printf(
-            '<input name="%1$s[llm_api_base]" type="url" value="%2$s" class="regular-text" />'
-            . '<p class="description">%3$s</p>',
-            esc_attr( self::OPTION_NAME ),
-            esc_attr( $val ),
-            esc_html__( 'Base URL for custom OpenAI-compatible API endpoints (leave empty to use OpenAI API).', 'automated-review-generator' )
-        );
-    }
-
     public static function field_model() {
         $opts = get_option( self::OPTION_NAME, self::get_defaults() );
         $val  = isset( $opts['model'] ) ? $opts['model'] : self::get_defaults()['model'];
