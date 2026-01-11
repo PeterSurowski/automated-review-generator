@@ -33,7 +33,7 @@ class ARG_LLM {
         $examples = self::parse_examples( $examples_raw );
 
         // Build messages (system + user few-shot)
-        $system = "You are a helpful assistant that writes realistic product reviews. Be concise, human, and natural. Do NOT mention AI or that the text was generated. Avoid personal data and profanity. Follow the example reviews' style and tone. Respect forbidden phrases: $forbidden. Do NOT infer or include personal data (names, addresses, phone numbers) from product descriptions.";
+        $system = "You are a helpful assistant that writes realistic product reviews. BE EXTREMELY CONCISE — 6 to 60 words ONLY. Most reviews should be under 15 words. Be human, natural, and brief. Do NOT mention AI or that the text was generated. Avoid personal data and profanity. Follow the example reviews' style and tone. Respect forbidden phrases: $forbidden. Do NOT infer or include personal data (names, addresses, phone numbers) from product descriptions.";
 
         $user_msg = "Here are example reviews (do not repeat them verbatim):\n";
         foreach ( $examples as $i => $ex ) {
@@ -74,7 +74,7 @@ class ARG_LLM {
 
         $tone = self::rating_to_tone( $rating );
 
-        $user_msg .= "\nTask: Write a single " . strtolower( $tone ) . " review for the product '" . $title . "'. Output only the review text, about 80-160 words, similar in style to the examples.";
+        $user_msg .= "\nTask: Write a single " . strtolower( $tone ) . " review for the product '" . $title . "'. IMPORTANT: Use 6 to 60 words ONLY. Keep most reviews under 15 words. Output only the review text, nothing else.";
 
         $body = array(
             'model' => $model,
@@ -140,13 +140,15 @@ class ARG_LLM {
                 }
             }
 
-            // enforce length boundaries (approx words)
+            // Enforce strict length boundaries: 6-60 words
             $words = str_word_count( $text );
-            if ( $words < 20 || $words > 300 ) {
-                // still accept but trim or skip; here we trim if too long
-                if ( $words > 300 ) {
-                    $text = wp_trim_words( $text, 160, '...' );
-                }
+            if ( $words < 6 ) {
+                // Too short, skip this result
+                continue;
+            }
+            if ( $words > 60 ) {
+                // Too long, trim to 60 words max
+                $text = wp_trim_words( $text, 60, '' );
             }
 
             $results[] = $text;
@@ -260,24 +262,33 @@ class ARG_LLM {
     private static function select_diverse_usernames( $candidates, $count ) {
         if ( empty( $candidates ) ) { return array(); }
 
-        // Categorize candidates into style buckets
-        $buckets = array( 'underscore' => array(), 'hyphen' => array(), 'lower' => array(), 'pascal' => array(), 'alnum' => array(), 'initials' => array(), 'other' => array() );
+        // Categorize candidates into style buckets - keep it simple and inclusive
+        $buckets = array( 'underscore' => array(), 'hyphen' => array(), 'dots' => array(), 'mixed_case' => array(), 'numbers' => array(), 'simple' => array() );
         foreach ( $candidates as $c ) {
             $s = $c;
-            if ( preg_match('/^[a-z]+[0-9_]+$/i', $s ) && strpos( $s, '_' ) !== false ) {
+            // Check for underscores (but don't require numbers)
+            if ( strpos( $s, '_' ) !== false ) {
                 $buckets['underscore'][] = $s;
-            } elseif ( strpos( $s, '-' ) !== false ) {
+            } 
+            // Check for hyphens
+            elseif ( strpos( $s, '-' ) !== false ) {
                 $buckets['hyphen'][] = $s;
-            } elseif ( preg_match('/^[a-z0-9]{3,}$/', $s ) && strtolower($s) === $s && preg_match('/[a-z]/', $s) ) {
-                $buckets['lower'][] = $s;
-            } elseif ( preg_match('/^[A-Z][a-z]+[A-Z][a-z0-9]+$/', $s) ) {
-                $buckets['pascal'][] = $s;
-            } elseif ( preg_match('/^[a-z0-9]{6,}$/i', $s) && preg_match('/[0-9]/', $s) ) {
-                $buckets['alnum'][] = $s;
-            } elseif ( preg_match('/^[A-Z]{1,3}[\.\s]?[A-Z]{1,3}\.?$/', $s) || preg_match('/[A-Z]\./', $s) ) {
-                $buckets['initials'][] = $s;
-            } else {
-                $buckets['other'][] = $s;
+            }
+            // Check for dots/periods
+            elseif ( strpos( $s, '.' ) !== false ) {
+                $buckets['dots'][] = $s;
+            }
+            // Check for mixed case (at least one upper and one lower)
+            elseif ( preg_match('/[A-Z]/', $s) && preg_match('/[a-z]/', $s) ) {
+                $buckets['mixed_case'][] = $s;
+            }
+            // Check for numbers
+            elseif ( preg_match('/[0-9]/', $s) ) {
+                $buckets['numbers'][] = $s;
+            }
+            // Everything else (simple lowercase/uppercase only)
+            else {
+                $buckets['simple'][] = $s;
             }
         }
 
@@ -286,7 +297,7 @@ class ARG_LLM {
         $used_prefixes = array();
 
         // bucket order: try to cover many styles first
-        $order = array( 'underscore', 'hyphen', 'lower', 'pascal', 'alnum', 'initials', 'other' );
+        $order = array( 'underscore', 'hyphen', 'dots', 'mixed_case', 'numbers', 'simple' );
         $i = 0;
         while ( count( $picked ) < $count ) {
             $made_progress = false;
