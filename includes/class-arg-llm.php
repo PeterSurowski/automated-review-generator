@@ -388,15 +388,14 @@ class ARG_LLM {
         // Compute max_tokens based on candidate count (cap to a safe max)
         $max_tokens = max( 200, min( 1500, intval( $candidate_count * $est_tokens_per_candidate ) ) );
 
-        $system = "You are a helpful assistant that invents short, realistic usernames for product reviews. Avoid profanity and personal data. Return exactly one valid JSON array of strings and nothing else, e.g. [\"tex_teen_99\", \"J-red\", \"SeanR\"]. Do NOT include extra commentary or explanation.";
+        $system = "You are a helpful assistant that invents usernames for product reviews. About 50% should be realistic human names (first names, last names, or name + initial combinations like 'John', 'Smith', 'Sarah K.', 'J. Martinez'). The other 50% can be creative usernames with underscores, hyphens, numbers, or mixed case. Avoid profanity and personal data. Return exactly one valid JSON array of strings and nothing else, e.g. [\"John Smith\", \"tech_guru_22\", \"L.Ross\", \"Sarah K.\", \"innovator_mind\"]. Do NOT include extra commentary or explanation.";
 
         $user_msg = "Here are example usernames (do not repeat them verbatim). Examples are shown as bullets below:\n";
         foreach ( $examples as $i => $ex ) {
             $user_msg .= "- " . $ex . "\n";
         }
 
-        $user_msg .= "\nTask: Generate a single JSON array with exactly " . intval( $candidate_count ) . " unique candidate usernames. Requirements: each username must match regex ^[A-Za-z0-9_.-]{3,30}$ (letters, numbers, underscore, hyphen or dot only), must not contain consecutive punctuation (e.g., .. or __), and must not repeat the supplied examples verbatim. Use varied styles (underscore_with_numbers, hyphenated, initials with dots, alphanumeric tokens, PascalCase). Do NOT output nested arrays or trailing commas; if you cannot meet constraints, return an empty array []. Output only the JSON array.";
-
+        $user_msg .= "\nTask: Generate a single JSON array with exactly " . intval( $candidate_count ) . " unique candidate usernames. IMPORTANT: About 50% should be realistic human names (first names, last names, initials like \"John\", \"Smith\", \"Sarah K.\", \"J. Martinez\"). The other 50% can be creative usernames (tech_guru_22, Moon_Walker, Innovator, R3view3r). Names can use spaces, periods, letters only. Requirements: all usernames must be 3-30 characters, use only letters, numbers, underscores, hyphens, dots, or spaces, and must not repeat supplied examples. Do NOT output nested arrays or trailing commas; if you cannot meet constraints, return an empty array []. Output only the JSON array.";
         $body = array(
             'model' => $model,
             'messages' => array(

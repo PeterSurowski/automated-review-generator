@@ -496,21 +496,6 @@ class ARG_Admin {
         echo '<button type="submit" class="button button-secondary">' . esc_html__( 'Test LLM connection', 'automated-review-generator' ) . '</button>';
         echo '</form>';
 
-        // Quick HTTP transport check
-        echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;margin-right:1em;">';
-        echo '<input type="hidden" name="action" value="arg_check_http_transport" />';
-        wp_nonce_field( 'arg_check_http_action', 'arg_check_http_nonce' );
-        echo '<button type="submit" class="button button-secondary">' . esc_html__( 'Check HTTP transport', 'automated-review-generator' ) . '</button>';
-        echo '</form>';
-
-        // Generate username sample form
-        echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;margin-right:1em;">';
-        echo '<input type="hidden" name="action" value="arg_generate_usernames_sample" />';
-        wp_nonce_field( 'arg_generate_usernames_action', 'arg_generate_usernames_nonce' );
-        echo '<input type="hidden" name="count" value="10" />';
-        echo '<button type="submit" class="button button-secondary">' . esc_html__( 'Generate username sample', 'automated-review-generator' ) . '</button>';
-        echo '</form>';
-
         // Show LLM test result
         if ( isset( $_GET['arg_test_llm'] ) ) {
             $ok = '1' === $_GET['arg_test_llm'];
@@ -520,92 +505,6 @@ class ARG_Admin {
             } else {
                 echo '<div class="error notice"><p>' . esc_html__( 'LLM connection failed:', 'automated-review-generator' ) . ' ' . esc_html( $msg ) . '</p></div>';
             }
-        }
-
-        // Show quick HTTP transport check result
-        if ( isset( $_GET['arg_check_http'] ) ) {
-            $ok = '1' === $_GET['arg_check_http'];
-            $msg = isset( $_GET['arg_check_msg'] ) ? urldecode( $_GET['arg_check_msg'] ) : '';
-            if ( $ok ) {
-                echo '<div class="updated notice"><p>' . esc_html__( 'HTTP transport check:', 'automated-review-generator' ) . ' ' . esc_html( $msg ) . '</p></div>';
-            } else {
-                echo '<div class="error notice"><p><strong>' . esc_html__( 'HTTP transport check failed:', 'automated-review-generator' ) . '</strong> ' . esc_html( $msg ) . '</p></div>';
-            }
-        }
-
-        // Show notice after generating a username sample
-        if ( isset( $_GET['arg_username_sample'] ) ) {
-            $last_err = get_option( 'arg_last_llm_error' );
-            if ( ! empty( $last_err ) ) {
-                echo '<div class="error notice"><p><strong>' . esc_html__( 'LLM error while generating sample:', 'automated-review-generator' ) . '</strong> ' . esc_html( $last_err ) . '</p></div>';
-            } else {
-                echo '<div class="updated notice"><p>' . esc_html__( 'Username sample generated. Check the diagnostic box below for raw and final candidates.', 'automated-review-generator' ) . '</p></div>';
-            }
-        }
-
-        // Show last username sample (diagnostics)
-        $sample = get_option( 'arg_last_username_sample' );
-        if ( $sample ) {
-            echo '<div class="notice notice-info" style="margin-top:1em;padding:12px;">';
-            echo '<h3>' . esc_html__( 'Last generated username sample', 'automated-review-generator' ) . '</h3>';
-            if ( isset( $sample['raw'] ) && is_array( $sample['raw'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Raw:', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', array_slice( $sample['raw'], 0, 50 ) ) ) . '</code></p>';
-            }
-            if ( isset( $sample['final'] ) && is_array( $sample['final'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Final:', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', $sample['final'] ) ) . '</code></p>';
-            }
-            if ( isset( $sample['attempts'] ) ) {
-                echo '<p><em>' . sprintf( esc_html__( 'Attempts: %s', 'automated-review-generator' ), esc_html( $sample['attempts'] ) ) . '</em></p>';
-            }
-            if ( isset( $sample['fallback_used'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Fallback used:', 'automated-review-generator' ) . '</strong> ' . ( $sample['fallback_used'] ? esc_html__( 'Yes', 'automated-review-generator' ) : esc_html__( 'No', 'automated-review-generator' ) ) . '</p>';
-            }
-            if ( isset( $sample['truncated'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Truncated response:', 'automated-review-generator' ) . '</strong> ' . ( $sample['truncated'] ? esc_html__( 'Yes', 'automated-review-generator' ) : esc_html__( 'No', 'automated-review-generator' ) ) . '</p>';
-            }
-            if ( isset( $sample['rejected'] ) && is_array( $sample['rejected'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Rejected counts:', 'automated-review-generator' ) . '</strong> <code>' . esc_html( json_encode( $sample['rejected'] ) ) . '</code></p>';
-            }
-            if ( isset( $sample['rejected_samples'] ) && is_array( $sample['rejected_samples'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Rejected samples:', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', array_slice( $sample['rejected_samples'], 0, 50 ) ) ) . '</code></p>';
-            }
-            if ( isset( $sample['model_texts'] ) && is_array( $sample['model_texts'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Model texts (sample):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ' || ', array_slice( $sample['model_texts'], 0, 3 ) ) ) . '</code></p>';
-            }
-            if ( isset( $sample['clean'] ) && is_array( $sample['clean'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Cleaned candidates (last attempt):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', array_slice( $sample['clean'], 0, 50 ) ) ) . '</code></p>';
-            }
-            if ( isset( $sample['buckets'] ) && is_array( $sample['buckets'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Bucket counts:', 'automated-review-generator' ) . '</strong> <code>' . esc_html( json_encode( $sample['buckets'] ) ) . '</code></p>';
-            }
-            if ( isset( $sample['buckets_samples'] ) && is_array( $sample['buckets_samples'] ) ) {
-                $parts = array();
-                foreach ( $sample['buckets_samples'] as $k => $vals ) {
-                    $parts[] = $k . ':' . implode('|', $vals);
-                }
-                echo '<p><strong>' . esc_html__( 'Bucket examples:', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ' || ', $parts ) ) . '</code></p>';
-            }
-            if ( isset( $sample['raw_fallback_used'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Raw fallback used:', 'automated-review-generator' ) . '</strong> ' . ( $sample['raw_fallback_used'] ? esc_html__( 'Yes', 'automated-review-generator' ) : esc_html__( 'No', 'automated-review-generator' ) ) . '</p>';
-            }
-            if ( isset( $sample['used_model_array'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Used model array:', 'automated-review-generator' ) . '</strong> ' . ( $sample['used_model_array'] ? esc_html__( 'Yes', 'automated-review-generator' ) : esc_html__( 'No', 'automated-review-generator' ) ) . '</p>';
-            }
-            if ( isset( $sample['raw_fallback_candidates'] ) && is_array( $sample['raw_fallback_candidates'] ) && ! empty( $sample['raw_fallback_candidates'] ) ) {
-                echo '<p><strong>' . esc_html__( 'Raw fallback candidates (sample):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', array_slice( $sample['raw_fallback_candidates'], 0, 50 ) ) ) . '</code></p>';
-            }
-            if ( isset( $sample['http_response'] ) && $sample['http_response'] !== '' ) {
-                echo '<p><strong>' . esc_html__( 'HTTP response (truncated):', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( $sample['http_response'] ) . '</code></p>';
-            }
-
-            // Helpful troubleshooting when WP HTTP transports are missing
-            if ( isset( $sample['http_transport_missing'] ) && $sample['http_transport_missing'] ) {
-                echo '<div class="error notice" style="margin-top:8px;padding:10px;">';
-                echo '<p><strong>' . esc_html__( 'HTTP transport missing:', 'automated-review-generator' ) . '</strong> ' . esc_html__( 'PHP has no available HTTP transports. On MAMP/Local, enable the php_curl and php_openssl extensions and set allow_url_fopen=On in your php.ini, then restart MAMP/Apache/PHP-FPM. After that retry the sample.', 'automated-review-generator' ) . '</p>';
-                echo '</div>';
-            }
-
-            echo '</div>';
         }
 
         // Manual run form (separate to avoid nonce collision with settings form)
@@ -653,7 +552,7 @@ class ARG_Admin {
             'forbidden_content' => "AI-generated,do not buy",
             'llm_include_short_description' => 1,
             'llm_description_max_chars' => 300,
-            'username_examples' => "happybuyer\ntechfan42\nshopperjoe\nlovely_lucy\nreviewer_77\nmiker\nanna89\nsparkle85\nclever_cat\njane_doe9",
+            'username_examples' => "Stan Spedalski\nN. Tolen\nJeremy H.\nSusan H. Collins\nBarb\nCorey\nDanelsky J.\nMack T. LaPeer\nTechie_Guru\nInnovator_22\nMoon_Walker\nL.Ross\nJane_Smith\nR3view3r\nHappy_Hiker\nA.B.C.\nBob Johnson\nAmy K.\nMichael T.\nSarah",
         );
     }
 
