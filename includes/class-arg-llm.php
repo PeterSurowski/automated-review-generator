@@ -245,7 +245,7 @@ class ARG_LLM {
         foreach ( $parts as $p ) {
             $s = trim( $p );
             // Strip common list markers and numbering (e.g., "1. ", "1)", "- ", "* ", "•")
-            $s = preg_replace('/^\s*[\-\*\u2022]+\s*/u', '', $s);
+            $s = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $s);
             $s = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $s);
             $s = trim( $s );
             if ( $s !== '' ) { $out[] = $s; }
@@ -363,10 +363,9 @@ class ARG_LLM {
         $model = isset( $opts['model'] ) ? $opts['model'] : 'gpt-3.5-turbo';
         $temperature = isset( $opts['temperature'] ) ? floatval( $opts['temperature'] ) : 0.9;
         $top_p = 0.9;
-        // Estimate required tokens based on number of requested candidates and cap to safe limits
+        // Estimate required tokens per candidate (we'll compute max_tokens after candidate_count is known)
         $est_tokens_per_candidate = 30; // rough estimate (includes quotes/commas/spacing)
-        $max_tokens = max( 200, min( 1500, intval( $candidate_count * $est_tokens_per_candidate ) ) );
-        $forbidden = isset( $opts['forbidden_content'] ) ? $opts['forbidden_content'] : ''; 
+        $forbidden = isset( $opts['forbidden_content'] ) ? $opts['forbidden_content'] : '';  
 
         $examples_raw = isset( $opts['username_examples'] ) ? $opts['username_examples'] : '';
         $examples = self::parse_examples( $examples_raw );
@@ -375,6 +374,8 @@ class ARG_LLM {
         $candidate_target = isset( $params['candidate_multiplier'] ) ? intval( $params['candidate_multiplier'] ) : 3;
         $candidate_count = $desired * $candidate_target; // request more candidates to select from
         $candidate_count = min( max( $candidate_count, $desired ), 50 );
+        // Compute max_tokens based on candidate count (cap to a safe max)
+        $max_tokens = max( 200, min( 1500, intval( $candidate_count * $est_tokens_per_candidate ) ) );
 
         $system = "You are a helpful assistant that invents short, realistic usernames for product reviews. Avoid profanity and personal data. Return exactly one valid JSON array of strings and nothing else, e.g. [\"tex_teen_99\", \"J-red\", \"SeanR\"]. Do NOT include extra commentary or explanation.";
 
@@ -435,10 +436,15 @@ class ARG_LLM {
                 $body['messages'][1]['content'] = $user_msg;
             }
 
-            $resp = wp_remote_post( $url, array( 'headers' => $headers, 'body' => wp_json_encode( $body ), 'timeout' => 30 ) );
-            if ( is_wp_error( $resp ) ) {
-                $last_error = $resp->get_error_message();
-                continue;
+            // Allow tests to inject a mock response body via params (useful in CLI/dev environments)
+            if ( isset( $params['mock_remote_body'] ) ) {
+                $resp = array( 'body' => $params['mock_remote_body'], 'response' => array( 'code' => 200 ) );
+            } else {
+                $resp = wp_remote_post( $url, array( 'headers' => $headers, 'body' => wp_json_encode( $body ), 'timeout' => 30 ) );
+                if ( is_wp_error( $resp ) ) {
+                    $last_error = $resp->get_error_message();
+                    continue;
+                }
             }
             $code = intval( $resp['response']['code'] );
             if ( $code >= 400 ) {
@@ -490,7 +496,8 @@ class ARG_LLM {
                         if ( is_array( $json ) ) {
                             foreach ( $json as $it ) {
                                 $it = trim( (string) $it );
-                                $norm = preg_replace('/^\s*[\-\*\u2022]+\s*/u', '', $it);
+                                // strip common bullets (hyphen, asterisk, bullet)
+                                $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $it);
                                 $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                                 $norm = preg_replace('/^[\.\-_]+/', '', $norm);
                                 $norm = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $norm);
@@ -505,7 +512,7 @@ class ARG_LLM {
                             foreach ( $qm[1] as $it ) {
                                 $it = trim( (string) $it );
                                 // early normalize to avoid empty/short tokens
-                                $norm = preg_replace('/^\s*[\-\*\u2022]+\s*/u', '', $it);
+                                $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $it);
                                 $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                                 $norm = preg_replace('/^[\.\-_]+/', '', $norm);
                                 $norm = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $norm);
@@ -523,7 +530,7 @@ class ARG_LLM {
                         foreach ( $lines as $line ) {
                             $t = trim( (string) $line );
                             if ( $t !== '' && preg_match('/[A-Za-z0-9_\.\-]{3,30}/', $t) ) {
-                                $norm = preg_replace('/^\s*[\-\*\u2022]+\s*/u', '', $t);
+                                $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $t);
                                 $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                                 $norm = preg_replace('/^[\.\-_]+/', '', $norm);
                                 $norm = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $norm);
@@ -538,7 +545,7 @@ class ARG_LLM {
                     foreach ( $lines as $line ) {
                         $t = trim( (string) $line );
                         if ( $t !== '' && preg_match('/[A-Za-z0-9_\.\-]{3,30}/', $t) ) {
-                            $norm = preg_replace('/^\s*[\-\*\u2022]+\s*/u', '', $t);
+                            $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $t);
                             $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                             $norm = preg_replace('/^[\.\-_]+/', '', $norm);
                             $norm = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $norm);
@@ -574,7 +581,7 @@ class ARG_LLM {
             foreach ( $candidates as $c ) {
                 $u = trim( $c );
                 // strip bullets/numbering
-                $u = preg_replace('/^\s*[\-\*\u2022]+\s*/u', '', $u);
+                $u = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $u);
                 $u = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $u);
                 $u = preg_replace('/^[\.\-_]+/', '', $u);
                 // remove disallowed chars and spaces
@@ -647,7 +654,7 @@ class ARG_LLM {
             $cross_possible = array();
             foreach ( array_values( array_unique( $raw_collected ) ) as $rc ) {
                 $u = trim( (string) $rc );
-                $u = preg_replace('/^\s*[\-\*\u2022]+\s*/u', '', $u);
+                $u = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $u);
                 $u = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $u);
                 $u = preg_replace('/^[\.\-_]+/', '', $u);
                 $u = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $u);
@@ -686,7 +693,7 @@ class ARG_LLM {
                                     if ( preg_match('/@|https?:\/\//i', $val ) ) { continue; }
 
                                     // strip leading/trailing punctuation/spaces, but keep inner punctuation
-                                    $val2 = preg_replace('/^[\s\.\-_"\'']+|[\s\.\-_"\'']+$/u', '', $val);
+                                    $val2 = preg_replace('/^[\p{P}\s]+|[\p{P}\s]+$/u', '', $val);
                                     $val2 = preg_replace('/\s+/', '_', $val2);
                                     $val2 = trim( $val2 );
                                     if ( mb_strlen( $val2 ) >= 3 && mb_strlen( $val2 ) <= 30 ) { $raw_fallback_candidates[] = $val2; }
@@ -699,7 +706,7 @@ class ARG_LLM {
                                     $p = trim( $p, '"\'' );
                                     if ( $p === '' ) { continue; }
                                     if ( preg_match('/@|https?:\/\//i', $p ) ) { continue; }
-                                    $p2 = preg_replace('/^[\s\.\-_"\'']+|[\s\.\-_"\'']+$/u', '', $p);
+                                    $p2 = preg_replace('/^[\p{P}\s]+|[\p{P}\s]+$/u', '', $p);
                                     $p2 = preg_replace('/\s+/', '_', $p2);
                                     $p2 = trim( $p2 );
                                     if ( mb_strlen( $p2 ) >= 3 && mb_strlen( $p2 ) <= 30 ) { $raw_fallback_candidates[] = $p2; }
@@ -725,12 +732,7 @@ class ARG_LLM {
                     'error' => $err,
                     'raw' => array_values( array_unique( $raw_collected ) ),
                     'model_texts' => isset( $raw_texts ) ? array_values( array_unique( $raw_texts ) ) : array(),
-                    'http_response' => isset( $resp['body'] ) ? substr( $resp['body'], 0, 2000 ) : '',
-                    'final' => $final_candidates,
-                    'attempts' => $attempt,
-                    'clean' => isset( $clean ) ? $clean : array(),
-                    'buckets' => isset( $buckets_info ) ? array_map( 'count', $buckets_info ) : array(),
-                    'buckets_samples' => isset( $buckets_info ) ? array_map( function( $b ) { return array_slice( $b, 0, 6 ); }, $buckets_info ) : array(),
+                    'http_response' => ( is_array( $resp ) && isset( $resp['body'] ) ) ? substr( $resp['body'], 0, 2000 ) : ( is_wp_error( $resp ) ? $resp->get_error_message() : '' ),
                     'rejected' => $rejected_counts,
                     'rejected_samples' => array_slice( $rejected_samples, 0, 50 ),
                     'fallback_used' => ! empty( $fallback_used ),
@@ -750,7 +752,7 @@ class ARG_LLM {
             $diagn = array(
                 'raw' => array_values( array_unique( $raw_collected ) ),
                 'model_texts' => isset( $raw_texts ) ? array_values( array_unique( $raw_texts ) ) : array(),
-                'http_response' => isset( $resp['body'] ) ? substr( $resp['body'], 0, 2000 ) : '',
+                'http_response' => ( is_array( $resp ) && isset( $resp['body'] ) ) ? substr( $resp['body'], 0, 2000 ) : ( is_wp_error( $resp ) ? $resp->get_error_message() : '' ),
                 'final' => $final_candidates,
                 'attempts' => $attempt,
                 'clean' => isset( $clean ) ? $clean : array(),
