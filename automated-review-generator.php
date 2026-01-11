@@ -83,3 +83,23 @@ function arg_plugin_action_links( $links ) {
     return $links;
 }
 add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'arg_plugin_action_links' );
+
+// Handle manual run via admin-post.php (separate form to avoid nonce collision with settings)
+function arg_handle_run_now() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( esc_html__( 'Insufficient permissions', 'automated-review-generator' ) );
+    }
+
+    check_admin_referer( 'arg_run_now_action', 'arg_run_now_nonce' );
+
+    do_action( 'arg_daily_event' );
+
+    // Redirect back to settings page with a success flag
+    $redirect = wp_get_referer();
+    if ( ! $redirect ) {
+        $redirect = admin_url( 'admin.php?page=arg-admin' );
+    }
+    wp_redirect( add_query_arg( 'arg_run', '1', $redirect ) );
+    exit;
+}
+add_action( 'admin_post_arg_run_now', 'arg_handle_run_now' );

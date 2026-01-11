@@ -187,20 +187,21 @@ class ARG_Admin {
             echo '<div class="notice notice-warning"><p>' . esc_html__( 'Live posting is ENABLED — generated reviews may appear on your site. Use only on development/staging sites unless you understand the impact.', 'automated-review-generator' ) . '</p></div>';
         }
 
-        echo '<form method="post" action="options.php">';
-        settings_fields( 'arg_settings_group' );
-        do_settings_sections( 'arg-admin' );
+        // Manual run form (separate to avoid nonce collision with settings form)
+        echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;margin-right:1em;">';
+        echo '<input type="hidden" name="action" value="arg_run_now" />';
+        wp_nonce_field( 'arg_run_now_action', 'arg_run_now_nonce' );
+        echo '<button type="submit" class="button button-secondary">' . esc_html__( 'Run now', 'automated-review-generator' ) . '</button>';
+        echo '</form>';
 
-        // Manual run button (for testing) — uses admin post to trigger cron immediately
-        if ( isset( $_POST['arg_run_now'] ) ) {
-            check_admin_referer( 'arg_run_now_action' );
-            // Run the scheduled event handler immediately
-            do_action( 'arg_daily_event' );
+        // Show notice after run
+        if ( isset( $_GET['arg_run'] ) && '1' === $_GET['arg_run'] ) {
             echo '<div class="updated notice"><p>' . esc_html__( 'Manual run completed. Check the last run info below.', 'automated-review-generator' ) . '</p></div>';
         }
 
-        echo '<p><input type="submit" name="arg_run_now" class="button button-secondary" value="' . esc_attr__( 'Run now', 'automated-review-generator' ) . '" /> ';
-        wp_nonce_field( 'arg_run_now_action' );
+        echo '<form method="post" action="options.php">';
+        settings_fields( 'arg_settings_group' );
+        do_settings_sections( 'arg-admin' );
 
         submit_button();
         echo '</form>';
