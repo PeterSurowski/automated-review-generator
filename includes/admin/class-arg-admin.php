@@ -69,6 +69,22 @@ class ARG_Admin {
             'arg-admin',
             'arg_main_section'
         );
+
+        add_settings_field(
+            'enable_live_posts',
+            __( 'Enable live posting', 'automated-review-generator' ),
+            array( __CLASS__, 'field_enable_live_posts' ),
+            'arg-admin',
+            'arg_main_section'
+        );
+
+        add_settings_field(
+            'use_minutes',
+            __( 'Use minutes for testing', 'automated-review-generator' ),
+            array( __CLASS__, 'field_use_minutes' ),
+            'arg-admin',
+            'arg_main_section'
+        );
     }
 
     public static function section_cb() {
@@ -123,15 +139,69 @@ class ARG_Admin {
         );
     }
 
+    public static function field_enable_live_posts() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = ! empty( $opts['enable_live_posts'] );
+        printf(
+            '<label><input name="%1$s[enable_live_posts]" type="checkbox" value="1" %2$s /> %3$s</label>'
+            . '<p class="description">%4$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            checked( 1, $val, false ),
+            esc_html__( 'Generate publicly visible reviews (live). Requires explicit opt-in and is OFF by default.', 'automated-review-generator' ),
+            esc_html__( 'When unchecked, generated reviews are saved as pending and marked as test data. Use this on development/staging sites only.', 'automated-review-generator' )
+        );
+    }
+
+    public static function field_use_minutes() {
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        $val  = ! empty( $opts['use_minutes'] );
+        printf(
+            '<label><input name="%1$s[use_minutes]" type="checkbox" value="1" %2$s /> %3$s</label>'
+            . '<p class="description">%4$s</p>',
+            esc_attr( self::OPTION_NAME ),
+            checked( 1, $val, false ),
+            esc_html__( 'Treat the average frequency value as minutes instead of days. This enables fast testing and posts every few minutes.', 'automated-review-generator' ),
+            esc_html__( 'When enabled, the plugin schedules a per-minute cron and posts according to minutes. Disable this for production.', 'automated-review-generator' )
+        );
+    }
+
     public static function render_admin_page() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( esc_html__( 'Insufficient permissions', 'automated-review-generator' ) );
         }
 
         echo '<div class="wrap"><h1>' . esc_html__( 'Automated Review Generator', 'automated-review-generator' ) . '</h1>';
+
+        // Last run info
+        $last_run = get_option( 'arg_last_run' );
+        $last_count = get_option( 'arg_last_run_count', 0 );
+        if ( $last_run ) {
+            echo '<p><strong>' . esc_html__( 'Last run:', 'automated-review-generator' ) . '</strong> ' . esc_html( $last_run ) . ' &middot; <strong>' . esc_html__( 'Reviews generated:', 'automated-review-generator' ) . '</strong> ' . intval( $last_count ) . '</p>';
+        }
+
+        // Show test/live mode notice
+        $opts = get_option( self::OPTION_NAME, self::get_defaults() );
+        if ( empty( $opts['enable_live_posts'] ) ) {
+            echo '<div class="notice notice-info"><p>' . esc_html__( 'Test mode is enabled — generated reviews will not be publicly visible by default.', 'automated-review-generator' ) . '</p></div>';
+        } else {
+            echo '<div class="notice notice-warning"><p>' . esc_html__( 'Live posting is ENABLED — generated reviews may appear on your site. Use only on development/staging sites unless you understand the impact.', 'automated-review-generator' ) . '</p></div>';
+        }
+
         echo '<form method="post" action="options.php">';
         settings_fields( 'arg_settings_group' );
         do_settings_sections( 'arg-admin' );
+
+        // Manual run button (for testing) — uses admin post to trigger cron immediately
+        if ( isset( $_POST['arg_run_now'] ) ) {
+            check_admin_referer( 'arg_run_now_action' );
+            // Run the scheduled event handler immediately
+            do_action( 'arg_daily_event' );
+            echo '<div class="updated notice"><p>' . esc_html__( 'Manual run completed. Check the last run info below.', 'automated-review-generator' ) . '</p></div>';
+        }
+
+        echo '<p><input type="submit" name="arg_run_now" class="button button-secondary" value="' . esc_attr__( 'Run now', 'automated-review-generator' ) . '" /> ';
+        wp_nonce_field( 'arg_run_now_action' );
+
         submit_button();
         echo '</form>';
         echo '</div>';
@@ -143,6 +213,8 @@ class ARG_Admin {
             'avg_score' => '4.8',
             'negative_percentage' => 5,
             'review_prompt' => __( "Write a concise, helpful review (80-160 words). Mention product features, ease of use, and value for money. Keep tone friendly and realistic.", 'automated-review-generator' ),
+            'enable_live_posts' => 0,
+            'use_minutes' => 1,
         );
     }
 
@@ -195,6 +267,15 @@ class ARG_Admin {
         } else {
             $out['review_prompt'] = $defaults['review_prompt'];
         }
+
+        // enable_live_posts: boolean checkbox
+        $out['enable_live_posts'] = ( isset( $input['enable_live_posts'] ) && $input['enable_live_posts'] ) ? 1 : 0;
+
+        // use_minutes: boolean checkbox for dev time-scaling
+        $out['use_minutes'] = ( isset( $input['use_minutes'] ) && $input['use_minutes'] ) ? 1 : 0;
+
+        // Trigger an action so other components can react to option changes (reschedule cron, etc.)
+        do_action( 'arg_options_saved', $out );
 
         return $out;
     }
