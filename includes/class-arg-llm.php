@@ -520,8 +520,10 @@ class ARG_LLM {
                                 $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $it);
                                 $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                                 $norm = preg_replace('/^[\.\-_]+/', '', $norm);
-                                $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);
-                                $norm = trim( $norm );
+                                $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);                                // Convert underscores to spaces in human names (no numbers)
+                                if ( preg_match('/^[A-Za-z\s._-]+$/', $norm) && strpos($norm, '_') !== false ) {
+                                    $norm = str_replace('_', ' ', $norm);
+                                }                                $norm = trim( $norm );
                                 if ( strlen( $norm ) >= 3 && strlen( $norm ) <= 30 ) { $candidates[] = $norm; }
                             }
                             continue;
@@ -535,8 +537,10 @@ class ARG_LLM {
                                 $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $it);
                                 $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                                 $norm = preg_replace('/^[\.\-_]+/', '', $norm);
-                                $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);
-                                $norm = trim( $norm );
+                                $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);                                // Convert underscores to spaces in human names (no numbers)
+                                if ( preg_match('/^[A-Za-z\s._-]+$/', $norm) && strpos($norm, '_') !== false ) {
+                                    $norm = str_replace('_', ' ', $norm);
+                                }                                $norm = trim( $norm );
                                 if ( strlen( $norm ) >= 3 && strlen( $norm ) <= 30 ) { $candidates[] = $norm; }
                             }
                             continue;
@@ -553,8 +557,10 @@ class ARG_LLM {
                                 $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $t);
                                 $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                                 $norm = preg_replace('/^[\.\-_]+/', '', $norm);
-                                $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);
-                                $norm = trim( $norm );
+                                $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);                                // Convert underscores to spaces in human names (no numbers)
+                                if ( preg_match('/^[A-Za-z\s._-]+$/', $norm) && strpos($norm, '_') !== false ) {
+                                    $norm = str_replace('_', ' ', $norm);
+                                }                                $norm = trim( $norm );
                                 if ( strlen( $norm ) >= 3 && strlen( $norm ) <= 30 ) { $candidates[] = $norm; }
                             }
                         }
@@ -568,8 +574,10 @@ class ARG_LLM {
                             $norm = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $t);
                             $norm = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $norm);
                             $norm = preg_replace('/^[\.\-_]+/', '', $norm);
-                            $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);
-                            $norm = trim( $norm );
+                            $norm = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $norm);                            // Convert underscores to spaces in human names (no numbers)
+                            if ( preg_match('/^[A-Za-z\s._-]+$/', $norm) && strpos($norm, '_') !== false ) {
+                                $norm = str_replace('_', ' ', $norm);
+                            }                            $norm = trim( $norm );
                             if ( strlen( $norm ) >= 3 && strlen( $norm ) <= 30 ) { $candidates[] = $norm; }
                         }
                     }
@@ -696,8 +704,10 @@ class ARG_LLM {
                 $u = preg_replace('/^\s*[-*\x{2022}]+\s*/u', '', $u);
                 $u = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $u);
                 $u = preg_replace('/^[\.\-_]+/', '', $u);
-                $u = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $u);
-                if ( strlen( $u ) >= 3 && strlen( $u ) <= 30 && preg_match('/^[A-Za-z0-9_. -]{3,30}$/', $u) && ! preg_match('/[._\-]{2,}/', $u) ) {
+                $u = preg_replace('/[^A-Za-z0-9_\-\. ]/', '', $u);                // Convert underscores to spaces in human names (no numbers)
+                if ( preg_match('/^[A-Za-z\s._-]+$/', $u) && strpos($u, '_') !== false ) {
+                    $u = str_replace('_', ' ', $u);
+                }                if ( strlen( $u ) >= 3 && strlen( $u ) <= 30 && preg_match('/^[A-Za-z0-9_. -]{3,30}$/', $u) && ! preg_match('/[._\-]{2,}/', $u) ) {
                     $cross_possible[] = $u;
                 }
             }
