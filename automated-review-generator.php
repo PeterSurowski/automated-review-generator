@@ -159,3 +159,24 @@ function arg_handle_test_llm() {
     exit;
 }
 add_action( 'admin_post_arg_test_llm', 'arg_handle_test_llm' );
+
+// Handle generate username sample via admin-post.php
+function arg_handle_generate_usernames_sample() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( esc_html__( 'Insufficient permissions', 'automated-review-generator' ) );
+    }
+
+    check_admin_referer( 'arg_generate_usernames_action', 'arg_generate_usernames_nonce' );
+
+    $count = isset( $_POST['count'] ) ? intval( $_POST['count'] ) : 10;
+
+    if ( class_exists( 'ARG_LLM' ) ) {
+        ARG_LLM::generate_usernames( $count, array( 'diagnostics' => true, 'candidate_multiplier' => 3 ) );
+    }
+
+    $redirect = wp_get_referer() ?: admin_url( 'admin.php?page=arg-admin' );
+    $redirect = add_query_arg( 'arg_username_sample', '1', $redirect );
+    wp_redirect( $redirect );
+    exit;
+}
+add_action( 'admin_post_arg_generate_usernames_sample', 'arg_handle_generate_usernames_sample' );

@@ -163,8 +163,11 @@ class ARG_LLM {
     /**
      * Generate usernames based on admin-provided examples. Returns array of usernames or false.
      */
-    public static function generate_usernames( $count = 1 ) {
-        $opts = get_option( 'arg_options', array() );
+    public static function generate_usernames( $count = 1, $params = array() ) {
+        return self::generate_usernames_advanced( $count, $params );
+        /* LEFTOVER-BLOCK-START - removed by refactor (commented out) */
+    }
+        /* LEFTOVER BLOCK START
         if ( empty( $opts['enable_llm'] ) || empty( $opts['llm_provider'] ) || 'openai' !== $opts['llm_provider'] ) {
             return false;
         }
@@ -176,20 +179,21 @@ class ARG_LLM {
         }
 
         $model = isset( $opts['model'] ) ? $opts['model'] : 'gpt-3.5-turbo';
-        $temperature = isset( $opts['temperature'] ) ? floatval( $opts['temperature'] ) : 0.6;
+        $temperature = isset( $opts['temperature'] ) ? floatval( $opts['temperature'] ) : 0.8;
         $max_tokens = 50;
-        $forbidden = isset( $opts['forbidden_content'] ) ? $opts['forbidden_content'] : '';
+        $forbidden = isset( $opts['forbidden_content'] ) ? $opts['forbidden_content'] : ''; 
 
         $examples_raw = isset( $opts['username_examples'] ) ? $opts['username_examples'] : '';
         $examples = self::parse_examples( $examples_raw );
 
         $system = "You are a helpful assistant that invents short, realistic usernames for product reviews. Avoid profanity and personal data. Output only the usernames, one per line, with no extra text.";
 
-        $user_msg = "Here are example usernames (do not repeat them verbatim):\n";
+        $user_msg = "Here are example usernames (do not repeat them verbatim). Do NOT include list numbers or bullets in your output. Make each username varied and distinct — do not reuse the same leading token across multiple usernames. Output only the usernames, one per line, with no extra commentary:\n";
         foreach ( $examples as $i => $ex ) {
-            $user_msg .= "Example " . ( $i + 1 ) . ": " . $ex . "\n";
+            // show examples as bullets (no numeric prefixes) to avoid seeding numbering
+            $user_msg .= "- " . $ex . "\n";
         }
-        $user_msg .= "\nTask: Generate " . intval( $count ) . " unique usernames similar in style to the examples. Return them as a newline-separated list with no extra commentary. Use letters, numbers, underscores or hyphens only, 3-30 characters long.";
+        $user_msg .= "\nTask: Generate " . intval( $count ) . " unique usernames similar in style to the examples. Return them as a newline-separated list with no numbering or bullets, and no extra commentary. Use letters, numbers, underscores or hyphens only, 3-30 characters long. Avoid starting multiple usernames with the same exact prefix.";
 
         $body = array(
             'model' => $model,
@@ -230,21 +234,250 @@ class ARG_LLM {
             return false;
         }
 
-        $results = array();
-        foreach ( $data['choices'] as $choice ) {
-            $text = '';
-            if ( isset( $choice['message']['content'] ) ) {
-                $text = trim( $choice['message']['content'] );
-            } elseif ( isset( $choice['text'] ) ) {
-                $text = trim( $choice['text'] );
+
+    }
+
+        /* LEFTOVER-BLOCK-END (comment closed) */
+
+    private static function parse_examples( $raw ) {
+        $parts = preg_split( '/\r?\n\s*\r?\n|\r?\n/', trim( $raw ) );
+        $out = array();
+        foreach ( $parts as $p ) {
+            $s = trim( $p );
+            // Strip common list markers and numbering (e.g., "1. ", "1)", "- ", "* ", "•")
+            $s = preg_replace('/^\s*[\-\*\u2022]+\s*/u', '', $s);
+            $s = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $s);
+            $s = trim( $s );
+            if ( $s !== '' ) { $out[] = $s; }
+        }
+        return array_slice( $out, 0, 5 );
+    }
+
+    /**
+     * Choose a diverse set of usernames from candidates.
+     * Ensures different styles and enforces prefix and distance diversity.
+     */
+    private static function select_diverse_usernames( $candidates, $count ) {
+        if ( empty( $candidates ) ) { return array(); }
+
+        // Categorize candidates into style buckets
+        $buckets = array( 'underscore' => array(), 'hyphen' => array(), 'lower' => array(), 'pascal' => array(), 'alnum' => array(), 'initials' => array(), 'other' => array() );
+        foreach ( $candidates as $c ) {
+            $s = $c;
+            if ( preg_match('/^[a-z]+[0-9_]+$/i', $s ) && strpos( $s, '_' ) !== false ) {
+                $buckets['underscore'][] = $s;
+            } elseif ( strpos( $s, '-' ) !== false ) {
+                $buckets['hyphen'][] = $s;
+            } elseif ( preg_match('/^[a-z0-9]{3,}$/', $s ) && strtolower($s) === $s && preg_match('/[a-z]/', $s) ) {
+                $buckets['lower'][] = $s;
+            } elseif ( preg_match('/^[A-Z][a-z]+[A-Z][a-z0-9]+$/', $s) ) {
+                $buckets['pascal'][] = $s;
+            } elseif ( preg_match('/^[a-z0-9]{6,}$/i', $s) && preg_match('/[0-9]/', $s) ) {
+                $buckets['alnum'][] = $s;
+            } elseif ( preg_match('/^[A-Z]{1,3}[\.\s]?[A-Z]{1,3}\.?$/', $s) || preg_match('/[A-Z]\./', $s) ) {
+                $buckets['initials'][] = $s;
             } else {
+                $buckets['other'][] = $s;
+            }
+        }
+
+        // Pick candidates from different buckets round-robin to maximize style diversity
+        $picked = array();
+        $used_prefixes = array();
+
+        // bucket order: try to cover many styles first
+        $order = array( 'underscore', 'hyphen', 'lower', 'pascal', 'alnum', 'initials', 'other' );
+        $i = 0;
+        while ( count( $picked ) < $count ) {
+            $made_progress = false;
+            foreach ( $order as $bucket ) {
+                if ( empty( $buckets[ $bucket ] ) ) { continue; }
+                $candidate = array_shift( $buckets[ $bucket ] );
+                if ( ! $candidate ) { continue; }
+                // enforce prefix uniqueness (first 4 chars)
+                $pref = strtolower( substr( $candidate, 0, 4 ) );
+                if ( isset( $used_prefixes[ $pref ] ) ) {
+                    // try a different candidate from same bucket
+                    $found = false;
+                    foreach ( $buckets[ $bucket ] as $k => $alt ) {
+                        $apref = strtolower( substr( $alt, 0, 4 ) );
+                        if ( ! isset( $used_prefixes[ $apref ] ) ) {
+                            $candidate = $alt;
+                            unset( $buckets[ $bucket ][ $k ] );
+                            $found = true;
+                            break;
+                        }
+                    }
+                    if ( ! $found ) { continue; }
+                }
+
+                // ensure Levenshtein distance from existing picks is >= 3
+                $ok = true;
+                foreach ( $picked as $p ) {
+                    if ( levenshtein( strtolower( $p ), strtolower( $candidate ) ) < 3 ) { $ok = false; break; }
+                }
+                if ( ! $ok ) { continue; }
+
+                $picked[] = $candidate;
+                $used_prefixes[ $pref ] = true;
+                $made_progress = true;
+                if ( count( $picked ) >= $count ) { break 2; }
+            }
+
+            if ( ! $made_progress ) { break; }
+            $i++;
+            if ( $i > 10 ) { break; }
+        }
+
+        // If not enough picked, fill with remaining unique candidates preserving uniqueness
+        if ( count( $picked ) < $count ) {
+            $remaining = array();
+            foreach ( $buckets as $bucket ) { foreach ( $bucket as $c ) { $remaining[] = $c; } }
+            foreach ( $remaining as $r ) {
+                if ( count( $picked ) >= $count ) { break; }
+                $pref = strtolower( substr( $r, 0, 4 ) );
+                if ( isset( $used_prefixes[ $pref ] ) ) { continue; }
+                $picked[] = $r;
+                $used_prefixes[ $pref ] = true;
+            }
+        }
+
+        return array_slice( $picked, 0, $count );
+    }
+
+    /**
+     * Advanced username generation implementation (used by public wrapper).
+     */
+    private static function generate_usernames_advanced( $count = 1, $params = array() ) {
+        $opts = get_option( 'arg_options', array() );
+        if ( empty( $opts['enable_llm'] ) || empty( $opts['llm_provider'] ) || 'openai' !== $opts['llm_provider'] ) {
+            return false;
+        }
+
+        $api_key = isset( $opts['llm_api_key'] ) ? $opts['llm_api_key'] : '';
+        if ( empty( $api_key ) ) {
+            update_option( 'arg_last_llm_error', 'No API key configured' );
+            return false;
+        }
+
+        $model = isset( $opts['model'] ) ? $opts['model'] : 'gpt-3.5-turbo';
+        $temperature = isset( $opts['temperature'] ) ? floatval( $opts['temperature'] ) : 0.9;
+        $top_p = 0.9;
+        $max_tokens = 200;
+        $forbidden = isset( $opts['forbidden_content'] ) ? $opts['forbidden_content'] : '';
+
+        $examples_raw = isset( $opts['username_examples'] ) ? $opts['username_examples'] : '';
+        $examples = self::parse_examples( $examples_raw );
+
+        $desired = max( 1, intval( $count ) );
+        $candidate_target = isset( $params['candidate_multiplier'] ) ? intval( $params['candidate_multiplier'] ) : 3;
+        $candidate_count = $desired * $candidate_target; // request more candidates to select from
+        $candidate_count = min( max( $candidate_count, $desired ), 50 );
+
+        $system = "You are a helpful assistant that invents short, realistic usernames for product reviews. Avoid profanity and personal data. Output only a JSON array of usernames, e.g. [\"tex_teen_99\", \"J-red\", \"SeanR\"]. Do NOT include extra commentary or explanation.";
+
+        $user_msg = "Here are example usernames (do not repeat them verbatim). Examples are shown as bullets below:\n";
+        foreach ( $examples as $i => $ex ) {
+            $user_msg .= "- " . $ex . "\n";
+        }
+
+        $user_msg .= "\nTask: Generate a JSON array with " . intval( $candidate_count ) . " unique candidate usernames. Make them varied across styles similar to the examples: include underscore_with_numbers (e.g., tex_teen_99), hyphenated (e.g., J-red), short lowercase words, initials (converted to letters/dots), alphanumeric random tokens (e.g., fxqrb9796), and PascalCase. Use letters, numbers, underscores, hyphens or dots only (no spaces in final output). Ensure diversity: do NOT have more than one username starting with the same 4-character prefix. Do NOT repeat the examples verbatim. Output only the JSON array.";
+
+        $body = array(
+            'model' => $model,
+            'messages' => array(
+                array( 'role' => 'system', 'content' => $system ),
+                array( 'role' => 'user', 'content' => $user_msg ),
+            ),
+            'temperature' => $temperature,
+            'top_p' => $top_p,
+            'max_tokens' => $max_tokens,
+            'n' => 1,
+        );
+
+        $api_base = isset( $opts['llm_api_base'] ) && ! empty( $opts['llm_api_base'] ) ? rtrim( $opts['llm_api_base'], '\\/' ) : 'https://api.openai.com';
+        $url = $api_base . '/v1/chat/completions';
+
+        $headers = array(
+            'Authorization' => 'Bearer ' . $api_key,
+            'Content-Type'  => 'application/json',
+        );
+
+        $attempt = 0;
+        $max_attempts = 3;
+        $final_candidates = array();
+        $raw_collected = array();
+        $last_error = '';
+
+        while ( $attempt < $max_attempts && count( $final_candidates ) < $desired ) {
+            $attempt++;
+            // For retries, slightly increase randomness
+            if ( $attempt > 1 ) {
+                $body['temperature'] = min( 1.0, $temperature + 0.1 * $attempt );
+                $body['top_p'] = min( 1.0, $top_p + 0.05 * $attempt );
+                $user_msg .= "\nNote: please make the usernames more varied on retry #" . $attempt . ".";
+                $body['messages'][1]['content'] = $user_msg;
+            }
+
+            $resp = wp_remote_post( $url, array( 'headers' => $headers, 'body' => wp_json_encode( $body ), 'timeout' => 30 ) );
+            if ( is_wp_error( $resp ) ) {
+                $last_error = $resp->get_error_message();
+                continue;
+            }
+            $code = intval( $resp['response']['code'] );
+            if ( $code >= 400 ) {
+                $body_msg = isset( $resp['body'] ) ? $resp['body'] : ''; 
+                $last_error = 'HTTP ' . $code . ': ' . substr( $body_msg, 0, 200 );
                 continue;
             }
 
-            $lines = preg_split('/\r?\n|,/', $text);
-            foreach ( $lines as $line ) {
-                $u = trim( $line );
-                $u = trim( $u, " \t\n\r\0\x0B\"'•-–—" );
+            $data = json_decode( $resp['body'], true );
+            if ( empty( $data ) || empty( $data['choices'] ) ) {
+                $last_error = 'Invalid response structure';
+                continue;
+            }
+
+            // Parse text - prefer JSON array if the model returned it
+            $candidates = array();
+            foreach ( $data['choices'] as $choice ) {
+                $text = '';
+                if ( isset( $choice['message']['content'] ) ) {
+                    $text = trim( $choice['message']['content'] );
+                } elseif ( isset( $choice['text'] ) ) {
+                    $text = trim( $choice['text'] );
+                }
+                if ( $text === '' ) { continue; }
+
+                // Try to extract a JSON array inside the text
+                $json = null;
+                if ( preg_match('/\[.*\]/s', $text, $m) ) {
+                    $maybe = $m[0];
+                    $maybe = trim( $maybe, "\n\r \t'\"`" );
+                    $json = json_decode( $maybe, true );
+                }
+
+                if ( is_array( $json ) ) {
+                    foreach ( $json as $it ) {
+                        $candidates[] = trim( (string) $it );
+                    }
+                } else {
+                    // fallback to splitting lines or commas
+                    $lines = preg_split('/\r?\n|,/', $text);
+                    foreach ( $lines as $line ) {
+                        $candidates[] = trim( (string) $line );
+                    }
+                }
+            }
+
+            // Sanitize and filter raw candidates
+            $clean = array();
+            foreach ( $candidates as $c ) {
+                $u = trim( $c );
+                // strip bullets/numbering
+                $u = preg_replace('/^\s*[\-\*\u2022]+\s*/u', '', $u);
+                $u = preg_replace('/^\s*\d+[\.\)\-]*\s*/', '', $u);
+                $u = preg_replace('/^[\.\-_]+/', '', $u);
+                // remove disallowed chars and spaces
                 $u = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $u);
                 if ( strlen( $u ) < 3 || strlen( $u ) > 30 ) { continue; }
                 $lower = strtolower( $u );
@@ -256,27 +489,32 @@ class ARG_LLM {
                     }
                     if ( $bad ) { continue; }
                 }
-                $results[] = $u;
+                $clean[] = $u;
             }
+
+            $clean = array_values( array_unique( $clean ) );
+            $raw_collected = array_merge( $raw_collected, $clean );
+
+            // Select diverse final candidates from 'raw_collected'
+            $final_candidates = self::select_diverse_usernames( $raw_collected, $desired );
+
+            // If we have enough, break; otherwise allow retry loop to continue
         }
 
-        if ( empty( $results ) ) {
-            update_option( 'arg_last_llm_error', 'No valid usernames generated' );
+        if ( empty( $final_candidates ) ) {
+            $err = $last_error ?: 'No valid usernames generated';
+            update_option( 'arg_last_llm_error', $err );
             return false;
         }
 
-        $results = array_values( array_unique( $results ) );
-        return array_slice( $results, 0, max( 1, intval( $count ) ) );
-    }
-
-    private static function parse_examples( $raw ) {
-        $parts = preg_split( '/\r?\n\s*\r?\n|\r?\n/', trim( $raw ) );
-        $out = array();
-        foreach ( $parts as $p ) {
-            $s = trim( $p );
-            if ( $s !== '' ) { $out[] = $s; }
+        // Store diagnostics if requested
+        if ( isset( $params['diagnostics'] ) && $params['diagnostics'] ) {
+            $diagn = array( 'raw' => array_values( array_unique( $raw_collected ) ), 'final' => $final_candidates, 'attempts' => $attempt );
+            update_option( 'arg_last_username_sample', $diagn );
+            return $diagn;
         }
-        return array_slice( $out, 0, 5 );
+
+        return $final_candidates;
     }
 
     private static function rating_to_tone( $rating ) {

@@ -496,6 +496,14 @@ class ARG_Admin {
         echo '<button type="submit" class="button button-secondary">' . esc_html__( 'Test LLM connection', 'automated-review-generator' ) . '</button>';
         echo '</form>';
 
+        // Generate username sample form
+        echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;margin-right:1em;">';
+        echo '<input type="hidden" name="action" value="arg_generate_usernames_sample" />';
+        wp_nonce_field( 'arg_generate_usernames_action', 'arg_generate_usernames_nonce' );
+        echo '<input type="hidden" name="count" value="10" />';
+        echo '<button type="submit" class="button button-secondary">' . esc_html__( 'Generate username sample', 'automated-review-generator' ) . '</button>';
+        echo '</form>';
+
         // Show LLM test result
         if ( isset( $_GET['arg_test_llm'] ) ) {
             $ok = '1' === $_GET['arg_test_llm'];
@@ -505,6 +513,28 @@ class ARG_Admin {
             } else {
                 echo '<div class="error notice"><p>' . esc_html__( 'LLM connection failed:', 'automated-review-generator' ) . ' ' . esc_html( $msg ) . '</p></div>';
             }
+        }
+
+        // Show notice after generating a username sample
+        if ( isset( $_GET['arg_username_sample'] ) ) {
+            echo '<div class="updated notice"><p>' . esc_html__( 'Username sample generated. Check the diagnostic box below for raw and final candidates.', 'automated-review-generator' ) . '</p></div>';
+        }
+
+        // Show last username sample (diagnostics)
+        $sample = get_option( 'arg_last_username_sample' );
+        if ( $sample ) {
+            echo '<div class="notice notice-info" style="margin-top:1em;padding:12px;">';
+            echo '<h3>' . esc_html__( 'Last generated username sample', 'automated-review-generator' ) . '</h3>';
+            if ( isset( $sample['raw'] ) && is_array( $sample['raw'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Raw:', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', array_slice( $sample['raw'], 0, 50 ) ) ) . '</code></p>';
+            }
+            if ( isset( $sample['final'] ) && is_array( $sample['final'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Final:', 'automated-review-generator' ) . '</strong><br /><code>' . esc_html( implode( ', ', $sample['final'] ) ) . '</code></p>';
+            }
+            if ( isset( $sample['attempts'] ) ) {
+                echo '<p><em>' . sprintf( esc_html__( 'Attempts: %s', 'automated-review-generator' ), esc_html( $sample['attempts'] ) ) . '</em></p>';
+            }
+            echo '</div>';
         }
 
         // Manual run form (separate to avoid nonce collision with settings form)
