@@ -552,7 +552,7 @@ class ARG_Admin {
             'forbidden_content' => "AI-generated,do not buy",
             'llm_include_short_description' => 1,
             'llm_description_max_chars' => 300,
-            'username_examples' => "Stan Spedalski\nN. Tolen\nJeremy H.\nSusan H. Collins\nBarb\nCorey\nDanelsky J.\nMack T. LaPeer\nPizza_Lover_88\nBookworm_Jen\nOcean_Breeze\nPenguinDance\nTacoTuesday\nRainyDay42\nMapleLeaf99\nCoffeeAddict\nMountainHiker\nQuiltMaker\nBubblePop55\nThunderBolt",
+            'username_examples' => "Stan Spedalski\nN. Tolen\nJeremy H.\nSusan H. Collins\nBarb\nCorey\nDanelsky J.\nMack T. LaPeer\nTechie_Guru\nInnovator_22\nMoon_Walker\nL.Ross\nJane_Smith\nR3view3r\nHappy_Hiker\nA.B.C.\nBob Johnson\nAmy K.\nMichael T.\nSarah",
         );
     }
 
