@@ -37,13 +37,57 @@ class ARG_LLM {
             $user_prompt = trim( $opts['review_prompt'] );
         }
 
+        // Gather per-star examples if provided. Sources (priority): $params['examples'][rating],
+        // admin options 'review_examples_5'..'review_examples_1', or a generic 'review_examples'.
+        $examples_text = '';
+        $examples_by_rating = array();
+        if ( isset( $params['examples'] ) && is_array( $params['examples'] ) ) {
+            $examples_by_rating = $params['examples'];
+        } else {
+            for ( $r = 5; $r >= 1; $r-- ) {
+                $key = 'review_examples_' . $r;
+                if ( isset( $opts[ $key ] ) && is_string( $opts[ $key ] ) && trim( $opts[ $key ] ) !== '' ) {
+                    $examples_by_rating[ $r ] = trim( $opts[ $key ] );
+                }
+            }
+            // fallback: a generic block that can contain labeled sections
+            if ( empty( $examples_by_rating ) && isset( $opts['review_examples'] ) && is_string( $opts['review_examples'] ) && trim( $opts['review_examples'] ) !== '' ) {
+                // pass the raw block as-is under 'generic'
+                $examples_by_rating['generic'] = trim( $opts['review_examples'] );
+            }
+        }
+
+        if ( ! empty( $examples_by_rating ) ) {
+            $parts = array();
+            // If user provided per-rating entries, prefer those
+            for ( $r = 5; $r >= 1; $r-- ) {
+                if ( isset( $examples_by_rating[ $r ] ) ) {
+                    $parts[] = $r . "-star examples:\n" . trim( (string) $examples_by_rating[ $r ] );
+                }
+            }
+            if ( isset( $examples_by_rating['generic'] ) ) {
+                $parts[] = "General examples:\n" . trim( (string) $examples_by_rating['generic'] );
+            }
+            if ( ! empty( $parts ) ) {
+                $examples_text = implode("\n\n", $parts);
+            }
+        }
+
         $system = "You are an assistant that follows the user's instructions to write product reviews. Follow the user's prompt exactly and output only what they ask for.";
 
+        // Build the user message including explicit numeric star rating and any examples for style guidance
         if ( $user_prompt !== '' ) {
-            $user_msg = "Product: " . $title . "\nInstructions: " . $user_prompt;
+            $user_msg = "Product: " . $title . "\nStar rating: " . intval( $rating ) . "\nInstructions: " . $user_prompt;
+            if ( $examples_text !== '' ) {
+                $user_msg .= "\n\nStyle examples:\n" . $examples_text;
+            }
         } else {
             $tone = self::rating_to_tone( $rating );
-            $user_msg = "Task: Write a single " . strtolower( $tone ) . " review for the product '" . $title . "'. Output only the review text.";
+            $user_msg = "Task: Write a single " . strtolower( $tone ) . " review for the product '" . $title . "'.";
+            $user_msg .= "\nStar rating: " . intval( $rating ) . "; Output only the review text.";
+            if ( $examples_text !== '' ) {
+                $user_msg .= "\n\nStyle examples:\n" . $examples_text;
+            }
         }
 
         $body = array(
